@@ -1,0 +1,4 @@
+@SocialMeter_HostAddress = http://localhost:5099
+GET {{baseUrl}}/api/health
+Accept: application/json
+###
