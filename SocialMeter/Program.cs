@@ -105,7 +105,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Apply pending migrations so a fresh clone gets its tables and seed posts on first run.
+// Apply pending migrations so a fresh clone gets its tables on first run.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<SocialMeterDbContext>();

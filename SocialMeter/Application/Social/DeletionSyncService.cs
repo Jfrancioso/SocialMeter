@@ -13,9 +13,6 @@ namespace SocialMeter.Application.Social;
 /// </summary>
 public sealed class DeletionSyncService
 {
-    // Seeded demo posts carry fake ids; the platforms would report them "removed". They are not user content.
-    private const string SeedPrefix = "seed-";
-
     private readonly SocialMeterDbContext _db;
     private readonly IEnumerable<ISocialSource> _sources;
     private readonly ScoreHistoryService _history;
@@ -47,8 +44,7 @@ public sealed class DeletionSyncService
         var cutoff = now.AddDays(-_options.RetentionDays);
         var steamCutoff = now.AddDays(-_options.SteamReviewRetentionDays);
         var expired = await _db.SocialPosts
-            .Where(p => !p.ExternalId.StartsWith(SeedPrefix)
-                        && (p.CreatedAt < cutoff || (p.Platform == "steam" && p.CreatedAt < steamCutoff)))
+            .Where(p => p.CreatedAt < cutoff || (p.Platform == "steam" && p.CreatedAt < steamCutoff))
             .ToListAsync(ct);
         foreach (var p in expired) affected.Add((p.MediaType, p.TmdbId));
         _db.SocialPosts.RemoveRange(expired);
@@ -64,7 +60,6 @@ public sealed class DeletionSyncService
 
             var due = await _db.SocialPosts
                 .Where(p => p.Platform == source.Platform
-                            && !p.ExternalId.StartsWith(SeedPrefix)
                             && (p.LastCheckedAt == null || p.LastCheckedAt < recheckBefore))
                 .OrderBy(p => p.LastCheckedAt ?? DateTime.MinValue)
                 .Take(_options.DeletionSyncBatch)

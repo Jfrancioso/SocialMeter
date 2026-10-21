@@ -288,9 +288,8 @@ public sealed class SocialMeterService : ISocialMeterService
         {
             var titlePosts = group.ToList();
 
-            // Seeded demo posts are hand-labelled and never re-assessed.
             var toAssess = titlePosts
-                .Where(p => !p.ExternalId.StartsWith("seed-") && (force || p.Analyzer != AnalyzerFor(p)))
+                .Where(p => force || p.Analyzer != AnalyzerFor(p))
                 .ToList();
 
             if (toAssess.Count > 0)
