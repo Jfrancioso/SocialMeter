@@ -317,5 +317,5 @@ public sealed class SocialMeterService : ISocialMeterService
 
     private static string Trim(string s, int max) => s.Length <= max ? s : s[..max];
 
-    public static string Key(MediaType mediaType) => mediaType == MediaType.Tv ? "tv" : "movie";
+    public static string Key(MediaType mediaType) => mediaType.Segment();
 }

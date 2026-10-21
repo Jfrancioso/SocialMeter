@@ -83,6 +83,12 @@ public sealed class TitleTracker : ITitleTracker
             await CollectAsync(seen, "Popular", p => _titles.GetPopularAsync(MediaType.Movie, p, ct), ct);
             await CollectAsync(seen, "Popular", p => _titles.GetPopularAsync(MediaType.Tv, p, ct), ct);
 
+            // Games: Steam's own "what's hot" lists. Nothing off these lists is tracked.
+            await CollectAsync(seen, "Top seller", p => _titles.GetTrendingAsync(MediaType.Game, p, ct), ct);
+            await CollectAsync(seen, "Most played", p => _titles.GetPopularAsync(MediaType.Game, p, ct), ct);
+            await CollectAsync(seen, "New on Steam", p => _titles.GetNewGamesAsync(p, ct), ct);
+            await CollectAsync(seen, "Coming soon", p => _titles.GetComingSoonGamesAsync(p, ct), ct);
+
             // Titles that earned an electric reading keep their place on merit.
             var electric = await _db.TitleSnapshots
                 .Where(s => s.Score >= _options.ElectricMinScore && s.TotalPosts >= _options.ElectricMinPosts)

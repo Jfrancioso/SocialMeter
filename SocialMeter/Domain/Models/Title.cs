@@ -1,8 +1,9 @@
 namespace SocialMeter.Domain.Models;
 
-/// <summary>A movie or TV show as SocialMeter knows it (sourced from TMDB).</summary>
+/// <summary>A movie, TV show or video game as SocialMeter knows it (movies/shows from TMDB, games from Steam).</summary>
 public sealed class Title
 {
+    /// <summary>The provider's id: TMDB id for movies and shows, Steam app id for games. The name predates games.</summary>
     public int TmdbId { get; init; }
     public MediaType MediaType { get; init; }
     public string Name { get; init; } = "";
@@ -23,6 +24,17 @@ public sealed class Title
     public string? Status { get; init; }
     public string? ImdbId { get; init; }
     public string? Homepage { get; init; }
+
+    // Game-only fields (null for movies and shows)
+    public string? Developer { get; init; }
+    public IReadOnlyList<string> Platforms { get; init; } = Array.Empty<string>();
+    public int? MetacriticScore { get; init; }
+    public string? MetacriticUrl { get; init; }
+
+    /// <summary>Steam's review summary: percent positive, its label ("Very Positive"), and how many reviews.</summary>
+    public int? SteamReviewPercent { get; init; }
+    public string? SteamReviewLabel { get; init; }
+    public int? SteamReviewCount { get; init; }
 
     public int? Year => ReleaseDate?.Year;
 

@@ -19,16 +19,17 @@ namespace SocialMeter.Infrastructure.Anthropic;
 public sealed class ClaudePostAssessor : IPostAssessor
 {
     private const string SystemPrompt = """
-        You assess social media posts for SocialMeter, a site that measures how audiences feel about a specific movie or TV show.
-        For every post you are given, answer two questions about the ONE title named in the request:
+        You assess social media posts for SocialMeter, a site that measures how audiences feel about a specific movie,
+        TV show or video game. For every post you are given, answer two questions about the ONE title named in the request:
 
         1. about_title — true only if the post expresses the author's own reaction to, opinion of, or experience with THIS title
-           (watched it, loved it, hated it, found it boring, recommends it, etc.). It is false when the post:
+           (watched or played it, loved it, hated it, found it boring, recommends it, etc.). It is false when the post:
            - is about a different work with a similar name, or merely mentions the title in passing;
            - is a reply or comment in a thread about something else (identifying a clip, arguing with a bot, tagging friends);
-           - is news, a trailer announcement, box-office or ranking lists, promotion, giveaways, or an ad;
-           - is a question with no opinion ("has anyone seen it?");
-           - is about an actor, director, or soundtrack as a person or work apart from this title.
+           - is news, a trailer or patch announcement, box-office, sales or ranking lists, promotion, giveaways, key resellers, or an ad;
+           - is a question with no opinion ("has anyone seen it?", "does this run on Steam Deck?");
+           - is about an actor, director, studio, streamer or soundtrack as a person or work apart from this title;
+           - for games: is a bug report, crash log, trade/LFG post, or server-status complaint with no view on the game itself.
 
         2. sentiment — a number from -1.0 (hates the title) to 1.0 (loves it), 0 for neutral or purely informational.
            Score ONLY the feeling toward the title itself. "Grok sucks, this is The Haunting of Hill House" says nothing
@@ -149,8 +150,9 @@ public sealed class ClaudePostAssessor : IPostAssessor
         var sb = new StringBuilder();
         sb.Append("Title: ").Append(title.Name);
         if (title.Year is { } y) sb.Append(" (").Append(y).Append(')');
-        sb.Append(" — ").Append(title.MediaType == MediaType.Tv ? "TV show" : "movie");
+        sb.Append(" — ").Append(title.MediaType.Label());
         if (title.Genres.Count > 0) sb.Append(", ").Append(string.Join('/', title.Genres));
+        if (title.Developer is not null) sb.Append(", by ").Append(title.Developer);
         sb.AppendLine();
         if (!string.IsNullOrWhiteSpace(title.Overview))
             sb.Append("Synopsis: ").AppendLine(Truncate(title.Overview, 300));

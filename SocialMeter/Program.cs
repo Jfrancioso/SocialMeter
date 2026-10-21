@@ -13,6 +13,7 @@ using SocialMeter.Infrastructure.Data;
 using SocialMeter.Infrastructure.Links;
 using SocialMeter.Infrastructure.Omdb;
 using SocialMeter.Infrastructure.Reddit;
+using SocialMeter.Infrastructure.Steam;
 using SocialMeter.Infrastructure.Tmdb;
 using SocialMeter.Infrastructure.X;
 using SocialMeter.Options;
@@ -40,6 +41,7 @@ builder.Services.AddHttpClient<TmdbClient>((sp, http) =>
     http.BaseAddress = new Uri(opts.BaseUrl.EndsWith('/') ? opts.BaseUrl : opts.BaseUrl + "/");
 });
 builder.Services.AddHttpClient<OmdbClient>();
+builder.Services.AddHttpClient<SteamClient>();
 builder.Services.AddHttpClient<RatingLinkResolver>();
 builder.Services.AddHttpClient<RedditSource>();
 builder.Services.AddHttpClient<XSource>();

@@ -46,8 +46,11 @@ public sealed partial class RatingLinkResolver
 
     public Task<string> MetacriticAsync(Title title, CancellationToken ct)
     {
+        if (title.MetacriticUrl is not null)
+            return Task.FromResult(title.MetacriticUrl);
+
         var slug = Slug(title.Name, '-');
-        var section = title.MediaType == MediaType.Tv ? "tv" : "movie";
+        var section = title.MediaType switch { MediaType.Tv => "tv", MediaType.Game => "game", _ => "movie" };
         var candidates = new List<string>();
         if (title.Year is { } y) candidates.Add($"https://www.metacritic.com/{section}/{slug}-{y}/");
         candidates.Add($"https://www.metacritic.com/{section}/{slug}/");

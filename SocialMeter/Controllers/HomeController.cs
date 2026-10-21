@@ -36,8 +36,10 @@ public sealed class HomeController : ControllerBase
         var seasonalTask = _tracker.GetSeasonalRowAsync(ct);
         var popularMoviesTask = _titles.GetPopularAsync(MediaType.Movie, 1, ct);
         var popularTvTask = _titles.GetPopularAsync(MediaType.Tv, 1, ct);
+        var topGamesTask = SafeAsync(_titles.GetTrendingAsync(MediaType.Game, 1, ct));
+        var mostPlayedTask = SafeAsync(_titles.GetPopularAsync(MediaType.Game, 1, ct));
 
-        await Task.WhenAll(trendingTask, nowPlayingTask, onTheAirTask, seasonalTask, popularMoviesTask, popularTvTask);
+        await Task.WhenAll(trendingTask, nowPlayingTask, onTheAirTask, seasonalTask, popularMoviesTask, popularTvTask, topGamesTask, mostPlayedTask);
 
         var trending = trendingTask.Result;
         var (seasonLabel, seasonSubtitle, seasonItems) = seasonalTask.Result;
@@ -49,14 +51,23 @@ public sealed class HomeController : ControllerBase
             new() { Key = "now_playing", Title = "In theaters", Subtitle = "Playing near you", Items = nowPlayingTask.Result.Items },
             new() { Key = "seasonal", Title = seasonLabel, Subtitle = seasonSubtitle, Items = seasonItems },
             new() { Key = "on_the_air", Title = "On TV this week", Subtitle = "Shows with new episodes airing", Items = onTheAirTask.Result.Items },
+            new() { Key = "top_games", Title = "Hot on Steam", Subtitle = "This week's top sellers", Items = topGamesTask.Result },
             new() { Key = "popular_movies", Title = "Popular movies", Items = popularMoviesTask.Result.Items },
-            new() { Key = "popular_tv", Title = "Popular shows", Items = popularTvTask.Result.Items }
+            new() { Key = "popular_tv", Title = "Popular shows", Items = popularTvTask.Result.Items },
+            new() { Key = "most_played", Title = "Most played right now", Subtitle = "Steam's live player counts", Items = mostPlayedTask.Result }
         };
 
         await _tracker.AnnotateAsync(rows.SelectMany(r => r.Items).Concat(featured is null ? [] : [featured]), ct);
 
-        var response = new HomeResponseDto { Featured = featured, Rows = rows };
+        var response = new HomeResponseDto { Featured = featured, Rows = rows.Where(r => r.Items.Count > 0).ToList() };
         _cache.Set(key, response, CacheFor);
         return Ok(response);
+    }
+
+    /// <summary>Steam is a second provider; if it is down the home page should still render the TMDB rows.</summary>
+    private static async Task<IReadOnlyList<Title>> SafeAsync(Task<PagedResult<Title>> pending)
+    {
+        try { return (await pending).Items; }
+        catch (Exception ex) when (ex is not OperationCanceledException) { return Array.Empty<Title>(); }
     }
 }

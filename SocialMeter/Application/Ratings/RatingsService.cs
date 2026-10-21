@@ -31,6 +31,13 @@ public sealed class RatingsService : IRatingsService
         if (_cache.TryGetValue(key, out IReadOnlyList<ExternalRating>? cached) && cached is not null)
             return cached;
 
+        if (title.MediaType == MediaType.Game)
+        {
+            var game = GameRatings(title);
+            _cache.Set(key, game, CacheFor);
+            return game;
+        }
+
         var ratings = new List<ExternalRating>
         {
             new()
@@ -40,7 +47,7 @@ public sealed class RatingsService : IRatingsService
                 Value = title.VoteCount > 0 ? $"{title.VoteAverage:0.0}/10" : null,
                 Normalized = title.VoteCount > 0 ? (int)Math.Round(title.VoteAverage * 10) : null,
                 Detail = title.VoteCount > 0 ? $"{title.VoteCount:N0} votes" : "No votes yet",
-                Url = $"https://www.themoviedb.org/{(title.MediaType == MediaType.Tv ? "tv" : "movie")}/{title.TmdbId}"
+                Url = $"https://www.themoviedb.org/{title.MediaType.Segment()}/{title.TmdbId}"
             }
         };
 
@@ -80,6 +87,35 @@ public sealed class RatingsService : IRatingsService
         // A failed lookup (key not yet active, daily quota hit) is retried soon rather than frozen for the full window.
         _cache.Set(key, (IReadOnlyList<ExternalRating>)ratings, omdbFailed ? RetryFailedAfter : CacheFor);
         return ratings;
+    }
+
+    /// <summary>Games: Steam's own review score (already on the title) and Metacritic via the URL Steam supplies.</summary>
+    private static IReadOnlyList<ExternalRating> GameRatings(Title title)
+    {
+        var steamUrl = $"https://store.steampowered.com/app/{title.TmdbId}/";
+        var hasReviews = title.SteamReviewPercent is not null && title.SteamReviewCount > 0;
+
+        return new List<ExternalRating>
+        {
+            new()
+            {
+                Source = "steam",
+                DisplayName = "Steam",
+                Value = hasReviews ? $"{title.SteamReviewPercent}%" : null,
+                Normalized = hasReviews ? title.SteamReviewPercent : null,
+                Detail = hasReviews ? $"{title.SteamReviewLabel} · {title.SteamReviewCount:N0} reviews" : "No reviews yet",
+                Url = steamUrl
+            },
+            new()
+            {
+                Source = "metacritic",
+                DisplayName = "Metacritic",
+                Value = title.MetacriticScore is { } m ? $"{m}/100" : null,
+                Normalized = title.MetacriticScore,
+                Detail = title.MetacriticScore is null ? "Not available" : "Metascore",
+                Url = title.MetacriticUrl ?? $"https://www.metacritic.com/search/{Uri.EscapeDataString(title.Name)}/"
+            }
+        };
     }
 
     private static ExternalRating Build(string source, string name, string? raw, int? normalized, string? detail, string? url, string suffix)

@@ -165,11 +165,8 @@ public sealed class RedditSource : ISocialSource
 
     private static string BuildQuery(Title title)
     {
-        // Quoted title keeps the search tight; the media words push out games, books and unrelated namesakes.
-        var media = title.MediaType == MediaType.Tv
-            ? "(show OR series OR season OR episode)"
-            : "(movie OR film)";
-        return $"\"{title.Name}\" {media}";
+        // Quoted title keeps the search tight; the media words push out namesakes of the other kinds.
+        return $"\"{title.Name}\" {title.MediaType.SearchWords()}";
     }
 
     private static bool Mentions(string? text, string name)

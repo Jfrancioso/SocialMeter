@@ -40,9 +40,8 @@ public sealed class XSource : ISocialSource
         if (!IsConfigured)
             return Array.Empty<SocialPostCandidate>();
 
-        var media = title.MediaType == MediaType.Tv ? "(show OR series OR season OR episode)" : "(movie OR film)";
         // Replies are almost never reviews ("@grok what movie is this?"), and every post returned costs credits.
-        var query = $"\"{title.Name}\" {media} -is:retweet -is:reply lang:en";
+        var query = $"\"{title.Name}\" {title.MediaType.SearchWords()} -is:retweet -is:reply lang:en";
         var max = Math.Clamp(_options.MaxResults, 10, 100);
 
         var url = "tweets/search/recent" +

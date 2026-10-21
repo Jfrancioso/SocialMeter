@@ -42,6 +42,14 @@ public sealed class TitlesController : ControllerBase
     public async Task<ActionResult<PagedResult<Title>>> OnTheAir([FromQuery] int page = 1, CancellationToken ct = default)
         => Ok(await Annotated(_titles.GetOnTheAirAsync(page, ct), ct));
 
+    [HttpGet("game/new-releases")]
+    public async Task<ActionResult<PagedResult<Title>>> NewGames([FromQuery] int page = 1, CancellationToken ct = default)
+        => Ok(await Annotated(_titles.GetNewGamesAsync(page, ct), ct));
+
+    [HttpGet("game/coming-soon")]
+    public async Task<ActionResult<PagedResult<Title>>> ComingSoonGames([FromQuery] int page = 1, CancellationToken ct = default)
+        => Ok(await Annotated(_titles.GetComingSoonGamesAsync(page, ct), ct));
+
     [HttpGet("{type}/popular")]
     public async Task<ActionResult<PagedResult<Title>>> Popular([FromRoute] MediaType type, [FromQuery] int page = 1, CancellationToken ct = default)
         => Ok(await Annotated(_titles.GetPopularAsync(type, page, ct), ct));
