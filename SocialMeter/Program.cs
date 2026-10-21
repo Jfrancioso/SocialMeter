@@ -33,6 +33,7 @@ builder.Services.Configure<XOptions>(builder.Configuration.GetSection(XOptions.S
 builder.Services.Configure<OmdbOptions>(builder.Configuration.GetSection(OmdbOptions.SectionName));
 builder.Services.Configure<SocialMeterOptions>(builder.Configuration.GetSection(SocialMeterOptions.SectionName));
 builder.Services.Configure<AnthropicOptions>(builder.Configuration.GetSection(AnthropicOptions.SectionName));
+builder.Services.Configure<SteamOptions>(builder.Configuration.GetSection(SteamOptions.SectionName));
 
 // ---- External clients ----
 builder.Services.AddHttpClient<TmdbClient>((sp, http) =>

@@ -3,7 +3,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 using SocialMeter.Domain.Models;
+using SocialMeter.Options;
 
 namespace SocialMeter.Infrastructure.Steam;
 
@@ -23,12 +25,14 @@ public sealed class SteamClient
 
     private readonly HttpClient _http;
     private readonly IMemoryCache _cache;
+    private readonly SteamOptions _options;
     private readonly ILogger<SteamClient> _logger;
 
-    public SteamClient(HttpClient http, IMemoryCache cache, ILogger<SteamClient> logger)
+    public SteamClient(HttpClient http, IMemoryCache cache, IOptions<SteamOptions> options, ILogger<SteamClient> logger)
     {
         _http = http;
         _cache = cache;
+        _options = options.Value;
         _logger = logger;
         _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "SocialMeter/1.0 (+audience sentiment meter)");
         _http.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "en-US,en;q=0.9");
@@ -137,7 +141,8 @@ public sealed class SteamClient
                     return null;
 
                 var reviews = await GetReviewSummaryAsync(appId, ct);
-                return Map(appId, data, reviews);
+                var art = await GetLibraryArtAsync(appId, ct);
+                return Map(appId, data, reviews, art);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -162,7 +167,46 @@ public sealed class SteamClient
         }
     }
 
-    private static Title Map(int appId, JsonElement d, ReviewSummary? reviews)
+    /// <summary>
+    /// With a Web API key, IStoreService/GetItems returns the real library artwork filenames for any game, new or old.
+    /// Returns null without a key or when the call fails; callers fall back to appdetails images.
+    /// Untested until a key is configured — the shape follows Steam's published GetItems response.
+    /// </summary>
+    private async Task<LibraryArt?> GetLibraryArtAsync(int appId, CancellationToken ct)
+    {
+        if (!_options.HasApiKey) return null;
+
+        try
+        {
+            var input = $"{{\"ids\":[{{\"appid\":{appId}}}],\"context\":{{\"language\":\"english\",\"country_code\":\"US\"}},\"data_request\":{{\"include_assets\":true}}}}";
+            var url = ApiBase + $"IStoreService/GetItems/v1/?key={Uri.EscapeDataString(_options.ApiKey)}&input_json={Uri.EscapeDataString(input)}";
+            var json = await _http.GetStringAsync(url, ct);
+            using var doc = JsonDocument.Parse(json);
+
+            var items = doc.RootElement.GetProperty("response").GetProperty("store_items");
+            if (items.GetArrayLength() == 0) return null;
+            var assets = items[0].GetProperty("assets");
+
+            var format = assets.GetProperty("asset_url_format").GetString();
+            if (string.IsNullOrEmpty(format)) return null;
+
+            string? Resolve(string key) =>
+                assets.TryGetProperty(key, out var f) && f.ValueKind == JsonValueKind.String
+                    ? AssetBase.Replace("steam/apps/", "") + format.Replace("${FILENAME}", f.GetString())
+                    : null;
+
+            return new LibraryArt(Resolve("library_capsule_2x") ?? Resolve("library_capsule"), Resolve("library_hero_2x") ?? Resolve("library_hero"));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Steam GetItems (library art) failed for {AppId}", appId);
+            return null;
+        }
+    }
+
+    private sealed record LibraryArt(string? Capsule, string? Hero);
+
+    private static Title Map(int appId, JsonElement d, ReviewSummary? reviews, LibraryArt? art)
     {
         string? Str(string name) => d.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
         List<string> StrList(string name, string? field = null) =>
@@ -199,10 +243,14 @@ public sealed class SteamClient
             MediaType = MediaType.Game,
             Name = CleanName(Str("name") ?? ""),
             Overview = Str("short_description") ?? "",
-            // The portrait capsule exists for most but not all games (new releases often lack it); the UI falls back
-            // to the backdrop, so the backdrop must be the one image Steam guarantees: header_image.
-            PosterPath = PosterUrl(appId),
-            BackdropPath = Str("header_image") ?? BackdropUrl(appId),
+            // Portrait art: GetItems (with a key) knows the real capsule for every game; otherwise the legacy
+            // un-hashed path works for older games and 404s for new ones, where the UI falls back to the header.
+            PosterPath = art?.Capsule ?? PosterUrl(appId),
+            // Hero: the library hero when known, else the store page background (big, real, hashed URL),
+            // else the first screenshot, else the header. All of these come straight from Steam, nothing guessed.
+            BackdropPath = art?.Hero ?? Str("background_raw") ?? FirstScreenshot(d) ?? Str("header_image") ?? BackdropUrl(appId),
+            // Cards need something that always exists when the portrait 404s: the header.
+            HeaderImage = Str("header_image"),
             ReleaseDate = release,
             Genres = StrList("genres", "description"),
             Developer = developers.Count > 0 ? string.Join(", ", developers) : null,
@@ -219,6 +267,10 @@ public sealed class SteamClient
             VoteCount = reviews?.TotalReviews ?? 0
         };
     }
+
+    private static string? FirstScreenshot(JsonElement d)
+        => d.TryGetProperty("screenshots", out var shots) && shots.ValueKind == JsonValueKind.Array && shots.GetArrayLength() > 0
+           && shots[0].TryGetProperty("path_full", out var full) ? full.GetString() : null;
 
     /// <summary>Store names carry trademark marks ("Call of Duty®: Modern Warfare® 4") that nobody types in a post.</summary>
     private static string CleanName(string name)

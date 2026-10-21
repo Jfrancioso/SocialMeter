@@ -27,6 +27,9 @@ public sealed class Title
 
     // Game-only fields (null for movies and shows)
     public string? Developer { get; init; }
+
+    /// <summary>Steam's landscape header — the one image every game has; cards use it when the portrait is missing.</summary>
+    public string? HeaderImage { get; init; }
     public IReadOnlyList<string> Platforms { get; init; } = Array.Empty<string>();
     public int? MetacriticScore { get; init; }
     public string? MetacriticUrl { get; init; }
