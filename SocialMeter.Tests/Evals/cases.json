@@ -1,193 +1,890 @@
 [
-  { "id": "phm-moty", "platform": "x", "mediaType": "movie", "title": "Project Hail Mary", "year": 2026, "tags": ["positive", "short"],
+  {
+    "id": "phm-moty",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Project Hail Mary",
+    "year": 2026,
+    "tags": [
+      "positive",
+      "short"
+    ],
     "content": "Been waiting on this one for a while.\n\nMy movie of the year, Project Hail Mary, just came in one of the nicest steelbook presentations I've ever seen.",
-    "aboutTitle": true, "sentiment": [0.5, 1.0], "substance": [0.2, 0.6] },
-
-  { "id": "phm-imax", "platform": "x", "mediaType": "movie", "title": "Project Hail Mary", "year": 2026, "tags": ["positive", "specific"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.5,
+      1.0
+    ],
+    "substance": [
+      0.2,
+      0.6
+    ]
+  },
+  {
+    "id": "phm-imax",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Project Hail Mary",
+    "year": 2026,
+    "tags": [
+      "positive",
+      "specific"
+    ],
     "content": "Just watched the IMAX 70MM Bluray version of project hail mary, it's just visually breath taking. It was so much better than my regular dolby cinema version. They should build more True 70MM IMAX, So people can actually watch what director intended the film would be.",
-    "aboutTitle": true, "sentiment": [0.5, 1.0], "substance": [0.4, 0.9] },
-
-  { "id": "phm-worst", "platform": "x", "mediaType": "movie", "title": "Project Hail Mary", "year": 2026, "tags": ["negative"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.5,
+      1.0
+    ],
+    "substance": [
+      0.4,
+      0.9
+    ]
+  },
+  {
+    "id": "phm-worst",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Project Hail Mary",
+    "year": 2026,
+    "tags": [
+      "negative"
+    ],
     "content": "Anytime I remember that Project Hail Mary movie, I get so pissed again\nGenuinely the worst movie I've seen this year and I'm a huge fan of the book",
-    "aboutTitle": true, "sentiment": [-1.0, -0.5], "substance": [0.2, 0.6] },
-
-  { "id": "phm-wholesome", "platform": "x", "mediaType": "movie", "title": "Project Hail Mary", "year": 2026, "tags": ["positive", "defense"],
+    "aboutTitle": true,
+    "sentiment": [
+      -1.0,
+      -0.5
+    ],
+    "substance": [
+      0.2,
+      0.6
+    ]
+  },
+  {
+    "id": "phm-wholesome",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Project Hail Mary",
+    "year": 2026,
+    "tags": [
+      "positive",
+      "defense"
+    ],
     "content": "idk why you guys hate project hail mary so much, good forbid a movie is wholesome and cute",
-    "aboutTitle": true, "sentiment": [0.2, 0.9], "substance": [0.1, 0.5] },
-
-  { "id": "phm-second", "platform": "x", "mediaType": "movie", "title": "Project Hail Mary", "year": 2026, "tags": ["positive", "comparison"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.2,
+      0.9
+    ],
+    "substance": [
+      0.1,
+      0.5
+    ]
+  },
+  {
+    "id": "phm-second",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Project Hail Mary",
+    "year": 2026,
+    "tags": [
+      "positive",
+      "comparison"
+    ],
     "content": "Is it insane to say that backrooms has the best soundtrack out of any movie releasing this year.\n\nCLOSE VERY CLOSE SECOND is Project Hail Mary though GOD that movie was amazing",
-    "aboutTitle": true, "sentiment": [0.5, 1.0], "substance": [0.2, 0.6] },
-
-  { "id": "phm-deadline", "platform": "x", "mediaType": "movie", "title": "Project Hail Mary", "year": 2026, "tags": ["offtopic", "promo"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.5,
+      1.0
+    ],
+    "substance": [
+      0.2,
+      0.6
+    ]
+  },
+  {
+    "id": "phm-deadline",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Project Hail Mary",
+    "year": 2026,
+    "tags": [
+      "offtopic",
+      "promo"
+    ],
     "content": "Hear from Daniel Pemberton, composer for 'Project Hail Mary' and 'Musk,' at Deadline's Sound & Screen Film\n\nFriday, November 6\n\nSound & Screen combines captivating film with the profound impact of music. This showcase honors the musical maestros behind the year's most",
-    "aboutTitle": false },
-
-  { "id": "phm-narnia", "platform": "x", "mediaType": "movie", "title": "Project Hail Mary", "year": 2026, "tags": ["offtopic", "other-title"],
+    "aboutTitle": false
+  },
+  {
+    "id": "phm-narnia",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Project Hail Mary",
+    "year": 2026,
+    "tags": [
+      "offtopic",
+      "other-title"
+    ],
     "content": "the NARNIA trailer did 481 million views in its first week. more than BARBIE and PROJECT HAIL MARY. gerwig turned a netflix movie into an event with a led zeppelin needle drop. who's betting against this one?",
-    "aboutTitle": false },
-
-  { "id": "phm-boxoffice", "platform": "x", "mediaType": "movie", "title": "Project Hail Mary", "year": 2026, "tags": ["offtopic", "list"],
+    "aboutTitle": false
+  },
+  {
+    "id": "phm-boxoffice",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Project Hail Mary",
+    "year": 2026,
+    "tags": [
+      "offtopic",
+      "list"
+    ],
     "content": "Top 10 Highest-Earning Movies of 2026 (so far) 🎬\n\n1. Spider-Man: Brand New Day: $2.51B\n2. The Odyssey: $1.78B\n3. Toy Story 5: $1.14B\n4. Michael: $1.03B\n5. The Super Mario Galaxy Movie: $1.01B\n6. The Devil Wears Prada 2: $693M\n7. Project Hail Mary: $684M",
-    "aboutTitle": false },
-
-  { "id": "phm-promo", "platform": "x", "mediaType": "movie", "title": "Project Hail Mary", "year": 2026, "tags": ["offtopic", "ad"],
+    "aboutTitle": false
+  },
+  {
+    "id": "phm-promo",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Project Hail Mary",
+    "year": 2026,
+    "tags": [
+      "offtopic",
+      "ad"
+    ],
     "content": "Who watched Project Hail Mary this year? Our team did!\n\nWe made a list of games if you loved the movie! 🎮\n\nLog all your games on Logg! 👇",
-    "aboutTitle": false },
-
-  { "id": "phm-joke", "platform": "x", "mediaType": "movie", "title": "Project Hail Mary", "year": 2026, "tags": ["offtopic", "reply"],
+    "aboutTitle": false
+  },
+  {
+    "id": "phm-joke",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Project Hail Mary",
+    "year": 2026,
+    "tags": [
+      "offtopic",
+      "reply"
+    ],
     "content": "@iwrestledafish_ a silly little movie called Project Hail Mary (I'm Ryan Gosling btw)",
-    "aboutTitle": false },
-
-  { "id": "hh-slowburn", "platform": "x", "mediaType": "tv", "title": "The Haunting of Hill House", "year": 2018, "tags": ["positive", "recommendation"],
+    "aboutTitle": false
+  },
+  {
+    "id": "hh-slowburn",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "The Haunting of Hill House",
+    "year": 2018,
+    "tags": [
+      "positive",
+      "recommendation"
+    ],
     "content": "@shinaswago try From, if you've seen it try the haunting of hill house (both are slow burns). i think you'd like them",
-    "aboutTitle": true, "sentiment": [0.1, 0.8], "substance": [0.1, 0.5] },
-
-  { "id": "hh-watched", "platform": "x", "mediaType": "tv", "title": "The Haunting of Hill House", "year": 2018, "tags": ["offtopic", "no-opinion"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.1,
+      0.8
+    ],
+    "substance": [
+      0.1,
+      0.5
+    ]
+  },
+  {
+    "id": "hh-watched",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "The Haunting of Hill House",
+    "year": 2018,
+    "tags": [
+      "offtopic",
+      "no-opinion"
+    ],
     "content": "@CoastSussex86 I watched the first season of The Haunting of Hill House recently but not the other ones",
-    "aboutTitle": false },
-
-  { "id": "hh-favorite", "platform": "x", "mediaType": "tv", "title": "The Haunting of Hill House", "year": 2018, "tags": ["positive"],
+    "aboutTitle": false
+  },
+  {
+    "id": "hh-favorite",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "The Haunting of Hill House",
+    "year": 2018,
+    "tags": [
+      "positive"
+    ],
     "content": "Doing my yearly rewatch of The Haunting of Hill House. It's my all time favorite show. It warms my heart every time.",
-    "aboutTitle": true, "sentiment": [0.7, 1.0], "substance": [0.2, 0.6] },
-
-  { "id": "hh-grok-id", "platform": "x", "mediaType": "tv", "title": "The Haunting of Hill House", "year": 2018, "tags": ["offtopic", "bot"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.7,
+      1.0
+    ],
+    "substance": [
+      0.2,
+      0.6
+    ]
+  },
+  {
+    "id": "hh-grok-id",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "The Haunting of Hill House",
+    "year": 2018,
+    "tags": [
+      "offtopic",
+      "bot"
+    ],
     "content": "@karlachonfire @RIrwin76086 @the_xamie It's The Haunting of Hill House (Netflix series, 2018). The clip shows the wedding scene from episode 6.",
-    "aboutTitle": false },
-
-  { "id": "hh-grok-sucks", "platform": "x", "mediaType": "tv", "title": "The Haunting of Hill House", "year": 2018, "tags": ["offtopic", "thread"],
+    "aboutTitle": false
+  },
+  {
+    "id": "hh-grok-sucks",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "The Haunting of Hill House",
+    "year": 2018,
+    "tags": [
+      "offtopic",
+      "thread"
+    ],
     "content": "@grok @RIrwin76086 @the_xamie Man Grok sucks. This is the Haunting of Hill House, a Netflix horror show.",
-    "aboutTitle": false },
-
-  { "id": "hh-ranking", "platform": "x", "mediaType": "tv", "title": "The Haunting of Hill House", "year": 2018, "tags": ["offtopic", "list"],
+    "aboutTitle": false
+  },
+  {
+    "id": "hh-ranking",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "The Haunting of Hill House",
+    "year": 2018,
+    "tags": [
+      "offtopic",
+      "list"
+    ],
     "content": "BEST NETFLIX SERIES OF ALL TIME 🏆\n\n1. DARK (2017-2020)\n2. MINDHUNTER (2017-2019)\n3. BLACK MIRROR\n4. THE HAUNTING OF HILL HOUSE\n5. STRANGER THINGS",
-    "aboutTitle": false },
-
-  { "id": "hh-bare-link", "platform": "x", "mediaType": "tv", "title": "The Haunting of Hill House", "year": 2018, "tags": ["offtopic", "link"],
+    "aboutTitle": false
+  },
+  {
+    "id": "hh-bare-link",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "The Haunting of Hill House",
+    "year": 2018,
+    "tags": [
+      "offtopic",
+      "link"
+    ],
     "content": "Episode 6 of The Haunting of Hill House https://t.co/xx7oCDTFZE",
-    "aboutTitle": false },
-
-  { "id": "hh-masterclass", "platform": "x", "mediaType": "tv", "title": "The Haunting of Hill House", "year": 2018, "tags": ["positive", "specific"],
+    "aboutTitle": false
+  },
+  {
+    "id": "hh-masterclass",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "The Haunting of Hill House",
+    "year": 2018,
+    "tags": [
+      "positive",
+      "specific"
+    ],
     "content": "The Haunting of Hill House episode six really is a masterclass in blocking, sets, and camera work. Five long takes and you never once feel the seams.",
-    "aboutTitle": true, "sentiment": [0.6, 1.0], "substance": [0.5, 1.0] },
-
-  { "id": "hh-means-everything", "platform": "x", "mediaType": "tv", "title": "The Haunting of Hill House", "year": 2018, "tags": ["positive"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.6,
+      1.0
+    ],
+    "substance": [
+      0.5,
+      1.0
+    ]
+  },
+  {
+    "id": "hh-means-everything",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "The Haunting of Hill House",
+    "year": 2018,
+    "tags": [
+      "positive"
+    ],
     "content": "On my 5th or 6th rewatch of the haunting of hill house god this show means everything to me",
-    "aboutTitle": true, "sentiment": [0.7, 1.0], "substance": [0.1, 0.5] },
-
-  { "id": "cl-ep7", "platform": "x", "mediaType": "tv", "title": "Crystal Lake", "year": 2026, "tags": ["negative", "specific"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.7,
+      1.0
+    ],
+    "substance": [
+      0.1,
+      0.5
+    ]
+  },
+  {
+    "id": "cl-ep7",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "Crystal Lake",
+    "year": 2026,
+    "tags": [
+      "negative",
+      "specific"
+    ],
     "content": "CRYSTAL LAKE Episode 7 feels like what Ryan Murphy would do if he was told to make a Friday the 13th prequel. I don't mean that as a compliment. The modern need to explain things that were best left unexplained can lead to baffling decisions. Jason's new backstory is one of 'em!",
-    "aboutTitle": true, "sentiment": [-0.9, -0.3], "substance": [0.6, 1.0] },
-
-  { "id": "cl-half-watching", "platform": "x", "mediaType": "tv", "title": "Crystal Lake", "year": 2026, "tags": ["positive", "mixed"],
+    "aboutTitle": true,
+    "sentiment": [
+      -0.9,
+      -0.3
+    ],
+    "substance": [
+      0.6,
+      1.0
+    ]
+  },
+  {
+    "id": "cl-half-watching",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "Crystal Lake",
+    "year": 2026,
+    "tags": [
+      "positive",
+      "mixed"
+    ],
     "content": "I wasn't sure about the first episode, but by the end of the season I actually loved half-watching Crystal Lake",
-    "aboutTitle": true, "sentiment": [0.2, 0.8], "substance": [0.2, 0.5] },
-
-  { "id": "cl-loved", "platform": "x", "mediaType": "tv", "title": "Crystal Lake", "year": 2026, "tags": ["positive", "specific"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.2,
+      0.8
+    ],
+    "substance": [
+      0.2,
+      0.5
+    ]
+  },
+  {
+    "id": "cl-loved",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "Crystal Lake",
+    "year": 2026,
+    "tags": [
+      "positive",
+      "specific"
+    ],
     "content": "I absolutely loved CRYSTAL LAKE & highly suggest any fan of friday the 13th to watch it. I loved the expansion of Jason's lore and the heavy focus on Pam, a character that literally started the franchise. A fun show with great kills. Easily one of the best horror shows this year.",
-    "aboutTitle": true, "sentiment": [0.7, 1.0], "substance": [0.6, 1.0] },
-
-  { "id": "cl-just-finished", "platform": "x", "mediaType": "tv", "title": "Crystal Lake", "year": 2026, "tags": ["offtopic", "no-opinion", "text-only"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.7,
+      1.0
+    ],
+    "substance": [
+      0.6,
+      1.0
+    ]
+  },
+  {
+    "id": "cl-just-finished",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "Crystal Lake",
+    "year": 2026,
+    "tags": [
+      "offtopic",
+      "no-opinion",
+      "text-only"
+    ],
     "content": "Just finished the Crystal Lake TV Show https://t.co/t97VwgoA9r",
-    "aboutTitle": false },
-
-  { "id": "ahs-renewal", "platform": "x", "mediaType": "tv", "title": "American Horror Story", "year": 2011, "tags": ["offtopic", "news"],
+    "aboutTitle": false
+  },
+  {
+    "id": "ahs-renewal",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "American Horror Story",
+    "year": 2011,
+    "tags": [
+      "offtopic",
+      "news"
+    ],
     "content": "AMERICAN HORROR STORY Renewed for Season 14 at FX Following Record-Breaking Streaming Premiere\n\nLink: https://t.co/9wuSmSUdB2",
-    "aboutTitle": false },
-
-  { "id": "ahs-fell-off", "platform": "x", "mediaType": "tv", "title": "American Horror Story", "year": 2011, "tags": ["negative"],
+    "aboutTitle": false
+  },
+  {
+    "id": "ahs-fell-off",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "American Horror Story",
+    "year": 2011,
+    "tags": [
+      "negative"
+    ],
     "content": "Because Ryan Murphy needs the money I guess because American Horror Story as a franchise fell off hard and his show The Beauty was horrible and nobody watched that either.",
-    "aboutTitle": true, "sentiment": [-1.0, -0.3], "substance": [0.2, 0.6] },
-
-  { "id": "ahs-seething", "platform": "x", "mediaType": "tv", "title": "American Horror Story", "year": 2011, "tags": ["positive", "joke"],
+    "aboutTitle": true,
+    "sentiment": [
+      -1.0,
+      -0.3
+    ],
+    "substance": [
+      0.2,
+      0.6
+    ]
+  },
+  {
+    "id": "ahs-seething",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "American Horror Story",
+    "year": 2011,
+    "tags": [
+      "positive",
+      "joke"
+    ],
     "content": "American Horror Story got renewed for another season! Jessica Lange is somewhere seething!\nGosh at least give us time to sort out what's going on in 13 please! 😭\n#AHS14",
-    "aboutTitle": true, "relevanceLenient": true, "sentiment": [0.0, 0.7], "substance": [0.1, 0.5] },
-
-  { "id": "ahs-glee", "platform": "x", "mediaType": "tv", "title": "American Horror Story", "year": 2011, "tags": ["offtopic", "joke"],
+    "aboutTitle": true,
+    "relevanceLenient": true,
+    "sentiment": [
+      0.0,
+      0.7
+    ],
+    "substance": [
+      0.1,
+      0.5
+    ]
+  },
+  {
+    "id": "ahs-glee",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "American Horror Story",
+    "year": 2011,
+    "tags": [
+      "offtopic",
+      "joke"
+    ],
     "content": "Plot twist: american horror story season 14 is actually the glee reboot",
-    "aboutTitle": false },
-
-  { "id": "sp-ios", "platform": "x", "mediaType": "tv", "title": "South Park", "year": 1997, "tags": ["offtopic", "passing"],
+    "aboutTitle": false
+  },
+  {
+    "id": "sp-ios",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "South Park",
+    "year": 1997,
+    "tags": [
+      "offtopic",
+      "passing"
+    ],
     "content": "just agreed to the ios software update terms and conditions and i got nervous because of that one south park episode",
-    "aboutTitle": false },
-
-  { "id": "sp-fandom", "platform": "x", "mediaType": "tv", "title": "South Park", "year": 1997, "tags": ["positive", "mild"],
+    "aboutTitle": false
+  },
+  {
+    "id": "sp-fandom",
+    "platform": "x",
+    "mediaType": "tv",
+    "title": "South Park",
+    "year": 1997,
+    "tags": [
+      "positive",
+      "mild"
+    ],
     "content": "I am just getting into the south park fandom and I feel like such a larp bc im on like season TWO out of 29????",
-    "aboutTitle": true, "sentiment": [0.0, 0.7], "substance": [0.1, 0.4] },
-
-  { "id": "cod-wishlist-bot", "platform": "x", "mediaType": "game", "title": "Call of Duty: Modern Warfare 4", "year": 2026, "tags": ["offtopic", "bot"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.0,
+      0.7
+    ],
+    "substance": [
+      0.1,
+      0.4
+    ]
+  },
+  {
+    "id": "cod-wishlist-bot",
+    "platform": "x",
+    "mediaType": "game",
+    "title": "Call of Duty: Modern Warfare 4",
+    "year": 2026,
+    "tags": [
+      "offtopic",
+      "bot"
+    ],
     "content": "An item on my Throne wishlist just got fully funded: Pre-purchase Call of Duty: Modern Warfare 4 on Steam. Thank you!",
-    "aboutTitle": false },
-
-  { "id": "cod-achievements", "platform": "x", "mediaType": "game", "title": "Call of Duty: Modern Warfare 4", "year": 2026, "tags": ["offtopic", "platform-news"],
+    "aboutTitle": false
+  },
+  {
+    "id": "cod-achievements",
+    "platform": "x",
+    "mediaType": "game",
+    "title": "Call of Duty: Modern Warfare 4",
+    "year": 2026,
+    "tags": [
+      "offtopic",
+      "platform-news"
+    ],
     "content": "Steam Achievement Sets are now officially in beta! Players that opt into the beta will be able to track their achievements across base game and DLC separately, starting with Call of Duty: Modern Warfare 4.",
-    "aboutTitle": false },
-
-  { "id": "cod-amazing", "platform": "x", "mediaType": "game", "title": "Call of Duty: Modern Warfare 4", "year": 2026, "tags": ["positive", "bare"],
+    "aboutTitle": false
+  },
+  {
+    "id": "cod-amazing",
+    "platform": "x",
+    "mediaType": "game",
+    "title": "Call of Duty: Modern Warfare 4",
+    "year": 2026,
+    "tags": [
+      "positive",
+      "bare"
+    ],
     "content": "Call of duty,\n\nModern warfare 4\n\nAmazing game 👍",
-    "aboutTitle": true, "sentiment": [0.5, 1.0], "substance": [0.0, 0.3] },
-
-  { "id": "cod-stream", "platform": "x", "mediaType": "game", "title": "Call of Duty: Modern Warfare 4", "year": 2026, "tags": ["offtopic", "promo"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.5,
+      1.0
+    ],
+    "substance": [
+      0.0,
+      0.3
+    ]
+  },
+  {
+    "id": "cod-stream",
+    "platform": "x",
+    "mediaType": "game",
+    "title": "Call of Duty: Modern Warfare 4",
+    "year": 2026,
+    "tags": [
+      "offtopic",
+      "promo"
+    ],
     "content": "LIVE NOW 🔴 Call of Duty: Modern Warfare 4 early access gameplay! Come hang out and drop a follow 👇 https://t.co/abc",
-    "aboutTitle": false },
-
-  { "id": "cp-detailed", "platform": "steam", "mediaType": "game", "title": "Cyberpunk 2077", "year": 2020, "tags": ["positive", "specific", "steam"],
+    "aboutTitle": false
+  },
+  {
+    "id": "cp-detailed",
+    "platform": "steam",
+    "mediaType": "game",
+    "title": "Cyberpunk 2077",
+    "year": 2020,
+    "tags": [
+      "positive",
+      "specific",
+      "steam"
+    ],
     "content": "10/10 definitely the best graphics I've ever seen and the story is amazing, incredibly detailed world, most of the bugs have been fixed over time since launch, one of the best games I've ever played for sure",
-    "aboutTitle": true, "sentiment": [0.7, 1.0], "substance": [0.5, 1.0] },
-
-  { "id": "cp-ten", "platform": "steam", "mediaType": "game", "title": "Cyberpunk 2077", "year": 2020, "tags": ["positive", "bare", "steam"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.7,
+      1.0
+    ],
+    "substance": [
+      0.5,
+      1.0
+    ]
+  },
+  {
+    "id": "cp-ten",
+    "platform": "steam",
+    "mediaType": "game",
+    "title": "Cyberpunk 2077",
+    "year": 2020,
+    "tags": [
+      "positive",
+      "bare",
+      "steam"
+    ],
     "content": "10/10",
-    "aboutTitle": true, "sentiment": [0.5, 1.0], "substance": [0.0, 0.25] },
-
-  { "id": "cp-edgerunners", "platform": "steam", "mediaType": "game", "title": "Cyberpunk 2077", "year": 2020, "tags": ["positive", "borderline", "steam"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.5,
+      1.0
+    ],
+    "substance": [
+      0.0,
+      0.25
+    ]
+  },
+  {
+    "id": "cp-edgerunners",
+    "platform": "steam",
+    "mediaType": "game",
+    "title": "Cyberpunk 2077",
+    "year": 2020,
+    "tags": [
+      "positive",
+      "borderline",
+      "steam"
+    ],
     "content": "i just watched cyberpunk edgerunners 2 and now i want to play cyberpunk 2077",
-    "aboutTitle": true, "relevanceLenient": true, "sentiment": [0.0, 0.7], "substance": [0.0, 0.4] },
-
-  { "id": "wd-sea", "platform": "steam", "mediaType": "game", "title": "WARDOGS", "year": 2025, "tags": ["negative", "specific", "steam"],
+    "aboutTitle": true,
+    "relevanceLenient": true,
+    "sentiment": [
+      0.0,
+      0.7
+    ],
+    "substance": [
+      0.0,
+      0.4
+    ]
+  },
+  {
+    "id": "wd-sea",
+    "platform": "steam",
+    "mediaType": "game",
+    "title": "WARDOGS",
+    "year": 2025,
+    "tags": [
+      "negative",
+      "specific",
+      "steam"
+    ],
     "content": "Do not play this game if you are employed, or have little time to play each day, especially on SEA servers, which are full of unemployed sweats. I see the potential in this game, but the SEA gaming community has put me off another wipe.",
-    "aboutTitle": true, "sentiment": [-0.9, -0.2], "substance": [0.5, 1.0] },
-
-  { "id": "wd-cwis", "platform": "steam", "mediaType": "game", "title": "WARDOGS", "year": 2025, "tags": ["negative", "mechanics", "steam"],
+    "aboutTitle": true,
+    "sentiment": [
+      -0.9,
+      -0.2
+    ],
+    "substance": [
+      0.5,
+      1.0
+    ]
+  },
+  {
+    "id": "wd-cwis",
+    "platform": "steam",
+    "mediaType": "game",
+    "title": "WARDOGS",
+    "year": 2025,
+    "tags": [
+      "negative",
+      "mechanics",
+      "steam"
+    ],
     "content": "CWIS kills tanks in less then 6 seconds.... tank shoots 10 shots taking over 2 min in time from main gun and CWIS still stands",
-    "aboutTitle": true, "sentiment": [-0.9, -0.2], "substance": [0.5, 1.0] },
-
-  { "id": "wd-tldr", "platform": "steam", "mediaType": "game", "title": "WARDOGS", "year": 2025, "tags": ["positive", "mixed", "steam"],
+    "aboutTitle": true,
+    "sentiment": [
+      -0.9,
+      -0.2
+    ],
+    "substance": [
+      0.5,
+      1.0
+    ]
+  },
+  {
+    "id": "wd-tldr",
+    "platform": "steam",
+    "mediaType": "game",
+    "title": "WARDOGS",
+    "year": 2025,
+    "tags": [
+      "positive",
+      "mixed",
+      "steam"
+    ],
     "content": "TLDR: It has quirks but you will probably enjoy it.\n\nI'd recommend the game to people. Didn't think I'd enjoy it as much as I have. It at the moment is in a weird state. Considering this is being made by a small group that had been working on it for years, the vehicle combat and logistics loop are genuinely fun.",
-    "aboutTitle": true, "sentiment": [0.2, 0.8], "substance": [0.5, 1.0] },
-
-  { "id": "wd-cheaters", "platform": "steam", "mediaType": "game", "title": "WARDOGS", "year": 2025, "tags": ["negative", "steam"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.2,
+      0.8
+    ],
+    "substance": [
+      0.5,
+      1.0
+    ]
+  },
+  {
+    "id": "wd-cheaters",
+    "platform": "steam",
+    "mediaType": "game",
+    "title": "WARDOGS",
+    "year": 2025,
+    "tags": [
+      "negative",
+      "steam"
+    ],
     "content": "Filled with cheaters and has a wet noodle as a anti cheat.",
-    "aboutTitle": true, "sentiment": [-1.0, -0.4], "substance": [0.2, 0.6] },
-
-  { "id": "aion-slop", "platform": "steam", "mediaType": "game", "title": "AION 2", "year": 2026, "tags": ["negative", "specific", "steam"],
+    "aboutTitle": true,
+    "sentiment": [
+      -1.0,
+      -0.4
+    ],
+    "substance": [
+      0.2,
+      0.6
+    ]
+  },
+  {
+    "id": "aion-slop",
+    "platform": "steam",
+    "mediaType": "game",
+    "title": "AION 2",
+    "year": 2026,
+    "tags": [
+      "negative",
+      "specific",
+      "steam"
+    ],
     "content": "In Short : Just don't... It's a slop of an MMO. It's so souless everything screams generic. While the graphic is good and pet system is quite nice, everyhing else is just meh or straight-up bad. The drop rates are built to push you to the cash shop and the energy system caps how long you can even play.",
-    "aboutTitle": true, "sentiment": [-1.0, -0.5], "substance": [0.6, 1.0] },
-
-  { "id": "dune-incredible", "platform": "reddit", "mediaType": "movie", "title": "Dune: Part Two", "year": 2024, "tags": ["positive"],
+    "aboutTitle": true,
+    "sentiment": [
+      -1.0,
+      -0.5
+    ],
+    "substance": [
+      0.6,
+      1.0
+    ]
+  },
+  {
+    "id": "dune-incredible",
+    "platform": "reddit",
+    "mediaType": "movie",
+    "title": "Dune: Part Two",
+    "year": 2024,
+    "tags": [
+      "positive"
+    ],
     "content": "Just watched Dune 2, absolutely incredible! The visuals were stunning and the story was so engaging.",
-    "aboutTitle": true, "sentiment": [0.6, 1.0], "substance": [0.2, 0.6] },
-
-  { "id": "dune-book", "platform": "reddit", "mediaType": "movie", "title": "Dune: Part Two", "year": 2024, "tags": ["negative"],
+    "aboutTitle": true,
+    "sentiment": [
+      0.6,
+      1.0
+    ],
+    "substance": [
+      0.2,
+      0.6
+    ]
+  },
+  {
+    "id": "dune-book",
+    "platform": "reddit",
+    "mediaType": "movie",
+    "title": "Dune: Part Two",
+    "year": 2024,
+    "tags": [
+      "negative"
+    ],
     "content": "As a book fan, I was really let down. They changed too much and it lost the essence.",
-    "aboutTitle": true, "sentiment": [-0.9, -0.3], "substance": [0.2, 0.6] },
-
-  { "id": "dune-okay", "platform": "reddit", "mediaType": "movie", "title": "Dune: Part Two", "year": 2024, "tags": ["neutral", "lukewarm"],
+    "aboutTitle": true,
+    "sentiment": [
+      -0.9,
+      -0.3
+    ],
+    "substance": [
+      0.2,
+      0.6
+    ]
+  },
+  {
+    "id": "dune-okay",
+    "platform": "reddit",
+    "mediaType": "movie",
+    "title": "Dune: Part Two",
+    "year": 2024,
+    "tags": [
+      "neutral",
+      "lukewarm"
+    ],
     "content": "It was okay I guess. Not as mind-blowing as everyone says but decent.",
-    "aboutTitle": true, "sentiment": [-0.3, 0.4], "substance": [0.1, 0.4] },
-
-  { "id": "dune-essay", "platform": "reddit", "mediaType": "movie", "title": "Dune: Part Two", "year": 2024, "tags": ["negative", "essay", "structured"],
+    "aboutTitle": true,
+    "sentiment": [
+      -0.3,
+      0.4
+    ],
+    "substance": [
+      0.1,
+      0.4
+    ]
+  },
+  {
+    "id": "dune-essay",
+    "platform": "reddit",
+    "mediaType": "movie",
+    "title": "Dune: Part Two",
+    "year": 2024,
+    "tags": [
+      "negative",
+      "essay",
+      "structured"
+    ],
     "content": "Mixed feelings after a second viewing.\n\nWhat works: the Arrakis sequences are the best-looking desert ever put on film, Zimmer's score is relentless in the right way, and Chalamet finally sells Paul's turn in the last act.\n\nWhat doesn't: Chani's rewritten arc exists to set up the sequel rather than to serve this story, the Harkonnen arena sequence is gorgeous but inert, and the pacing in the middle hour drags because the film keeps restating its theme instead of advancing it.\n\nStill worth seeing on the biggest screen you can find, but it's a 7, not the masterpiece the hype suggests.",
-    "aboutTitle": true, "sentiment": [-0.4, 0.4], "substance": [0.8, 1.0] },
-
-  { "id": "edge-question", "platform": "reddit", "mediaType": "movie", "title": "Dune: Part Two", "year": 2024, "tags": ["offtopic", "question"],
+    "aboutTitle": true,
+    "sentiment": [
+      -0.4,
+      0.4
+    ],
+    "substance": [
+      0.8,
+      1.0
+    ]
+  },
+  {
+    "id": "edge-question",
+    "platform": "reddit",
+    "mediaType": "movie",
+    "title": "Dune: Part Two",
+    "year": 2024,
+    "tags": [
+      "offtopic",
+      "question"
+    ],
     "content": "Has anyone seen Dune Part Two yet? Is it worth going in IMAX or is regular fine?",
-    "aboutTitle": false },
-
-  { "id": "edge-namesake", "platform": "x", "mediaType": "movie", "title": "Hades", "year": 2026, "tags": ["offtopic", "other-work"],
+    "aboutTitle": false
+  },
+  {
+    "id": "edge-namesake",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Hades",
+    "year": 2026,
+    "tags": [
+      "offtopic",
+      "other-work"
+    ],
     "content": "Hades 2 finally left early access and the final boss is unreal, Supergiant did it again. 200 hours in and still not bored.",
-    "aboutTitle": false },
-
-  { "id": "edge-sarcasm", "platform": "x", "mediaType": "movie", "title": "Dune: Part Two", "year": 2024, "tags": ["negative", "sarcasm"],
+    "aboutTitle": false
+  },
+  {
+    "id": "edge-sarcasm",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Dune: Part Two",
+    "year": 2024,
+    "tags": [
+      "negative",
+      "sarcasm"
+    ],
     "content": "Loved paying $22 to watch sand for three hours with no ending. Truly cinema. Dune Part Two everyone.",
-    "aboutTitle": true, "sentiment": [-1.0, -0.3], "substance": [0.1, 0.5] }
+    "aboutTitle": true,
+    "sentiment": [
+      -1.0,
+      -0.3
+    ],
+    "substance": [
+      0.1,
+      0.5
+    ]
+  },
+  {
+    "id": "offtopic-watched-link",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Street Fighter",
+    "year": 2026,
+    "tags": [
+      "off-topic",
+      "no-reaction"
+    ],
+    "content": "Watched the Street Fighter movie. https://t.co/K2xaasUnAK",
+    "aboutTitle": false
+  },
+  {
+    "id": "offtopic-list-of-films",
+    "platform": "x",
+    "mediaType": "movie",
+    "title": "Primetime",
+    "year": 2026,
+    "tags": [
+      "off-topic",
+      "passing-mention"
+    ],
+    "content": "watched primetime, you can see everything, and the devils. i ❤️ film. https://t.co/3X1Oj4FwUy",
+    "aboutTitle": false,
+    "relevanceLenient": true
+  }
 ]
