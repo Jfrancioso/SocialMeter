@@ -445,6 +445,42 @@ namespace SocialMeter.Migrations
 
                     b.ToTable("TitleSnapshots");
                 });
+
+            modelBuilder.Entity("SocialMeter.Domain.Models.TrackedTitle", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("Since")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TmdbId", "MediaType")
+                        .IsUnique()
+                        .HasDatabaseName("UX_TrackedTitles_Title");
+
+                    b.ToTable("TrackedTitles");
+                });
 #pragma warning restore 612, 618
         }
     }

@@ -8,6 +8,10 @@ public sealed class SocialMeterResponseDto
     public MediaType MediaType { get; init; }
     public string TitleName { get; init; } = "";
 
+    /// <summary>False when the title is outside the tracked set: no pulls happen and any reading shown is a leftover from when it was tracked.</summary>
+    public bool Tracked { get; init; }
+    public string? TrackedReason { get; init; }
+
     public SocialMeterScore Meter { get; init; } = new();
 
     /// <summary>The most influential posts behind the score.</summary>

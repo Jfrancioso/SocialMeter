@@ -14,6 +14,7 @@ public sealed class SocialMeterService : ISocialMeterService
     private readonly ITitleService _titles;
     private readonly IEnumerable<ISocialSource> _sources;
     private readonly IPostAssessor _assessor;
+    private readonly ITitleTracker _tracker;
     private readonly TrustPolicy _trust;
     private readonly SocialMeterOptions _options;
     private readonly ILogger<SocialMeterService> _logger;
@@ -23,6 +24,7 @@ public sealed class SocialMeterService : ISocialMeterService
         ITitleService titles,
         IEnumerable<ISocialSource> sources,
         IPostAssessor assessor,
+        ITitleTracker tracker,
         TrustPolicy trust,
         IOptions<SocialMeterOptions> options,
         ILogger<SocialMeterService> logger)
@@ -31,6 +33,7 @@ public sealed class SocialMeterService : ISocialMeterService
         _titles = titles;
         _sources = sources;
         _assessor = assessor;
+        _tracker = tracker;
         _trust = trust;
         _options = options.Value;
         _logger = logger;
@@ -48,10 +51,14 @@ public sealed class SocialMeterService : ISocialMeterService
         var stale = sinceRefresh > TimeSpan.FromHours(_options.RefreshAfterHours);
         var recentlyPulled = sinceRefresh < TimeSpan.FromMinutes(_options.MinForcedRefreshMinutes);
 
+        // The gate that bounds the bill: titles outside the tracked set never trigger a pull.
+        var trackedReason = await _tracker.GetReasonAsync(mediaType, tmdbId, ct);
+        var tracked = trackedReason is not null;
+
         var sourceStatus = new List<SourceStatusDto>();
         var fromCache = true;
 
-        if (stale || (forceRefresh && !recentlyPulled))
+        if (tracked && (stale || (forceRefresh && !recentlyPulled)))
         {
             fromCache = false;
             foreach (var source in _sources)
@@ -98,6 +105,8 @@ public sealed class SocialMeterService : ISocialMeterService
             TmdbId = tmdbId,
             MediaType = mediaType,
             TitleName = title.Name,
+            Tracked = tracked,
+            TrackedReason = trackedReason,
             Meter = meter,
             TopPosts = top,
             Sources = sourceStatus,

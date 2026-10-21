@@ -6,6 +6,7 @@ using SocialMeter.Application.Abstractions;
 using SocialMeter.Application.Ratings;
 using SocialMeter.Application.Social;
 using SocialMeter.Application.Titles;
+using SocialMeter.Application.Tracking;
 using Anthropic;
 using SocialMeter.Infrastructure.Anthropic;
 using SocialMeter.Infrastructure.Data;
@@ -65,6 +66,10 @@ builder.Services.AddSingleton<IPostAssessor>(sp =>
         : sp.GetRequiredService<LexiconPostAssessorFallback>().Inner);
 builder.Services.AddScoped<DeletionSyncService>();
 builder.Services.AddHostedService<DeletionSyncWorker>();
+
+// Only tracked titles (current, trending, seasonal, electric) get social pulls — the bill is bounded by the size of that set.
+builder.Services.AddScoped<ITitleTracker, TitleTracker>();
+builder.Services.AddHostedService<TrackedTitlesWorker>();
 
 builder.Services.AddDbContext<SocialMeterDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));

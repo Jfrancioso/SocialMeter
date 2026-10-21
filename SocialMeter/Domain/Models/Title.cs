@@ -25,4 +25,9 @@ public sealed class Title
     public string? Homepage { get; init; }
 
     public int? Year => ReleaseDate?.Year;
+
+    // Set by the tracker when the title is served to the UI; not part of TMDB's data.
+    /// <summary>True when SocialMeter is measuring this title right now. Locked titles show no meter and trigger no pulls.</summary>
+    public bool Tracked { get; set; }
+    public string? TrackedReason { get; set; }
 }

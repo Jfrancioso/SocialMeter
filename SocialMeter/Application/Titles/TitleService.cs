@@ -28,6 +28,12 @@ public sealed class TitleService : ITitleService
     public Task<PagedResult<Title>> GetTopRatedAsync(MediaType mediaType, int page = 1, CancellationToken ct = default)
         => _tmdb.GetTopRatedAsync(mediaType, page, ct);
 
+    public Task<PagedResult<Title>> GetUpcomingAsync(string region, int page = 1, CancellationToken ct = default)
+        => _tmdb.GetUpcomingAsync(region, page, ct);
+
+    public Task<PagedResult<Title>> DiscoverByGenreAsync(MediaType mediaType, int genreId, int page = 1, CancellationToken ct = default)
+        => _tmdb.DiscoverByGenreAsync(mediaType, genreId, page, ct);
+
     public Task<Title?> GetDetailsAsync(MediaType mediaType, int tmdbId, CancellationToken ct = default)
         => _tmdb.GetDetailsAsync(mediaType, tmdbId, ct);
 

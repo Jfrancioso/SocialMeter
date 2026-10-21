@@ -19,6 +19,21 @@ public sealed class SocialMeterOptions
     /// <summary>Posts newer than this count toward momentum.</summary>
     public int MomentumWindowDays { get; set; } = 14;
 
+    // ---- Tracked set: only these titles get social pulls. ----
+
+    /// <summary>How often the tracked set is rebuilt from TMDB's lists.</summary>
+    public int TrackedRefreshHours { get; set; } = 6;
+
+    /// <summary>A title stays tracked this long after it last appeared on a qualifying list, so it doesn't flicker.</summary>
+    public int TrackedGraceHours { get; set; } = 48;
+
+    /// <summary>Pages of each TMDB list to include (20 titles per page).</summary>
+    public int TrackedListPages { get; set; } = 2;
+
+    /// <summary>A title with at least this reading, on at least ElectricMinPosts posts, stays tracked on merit.</summary>
+    public int ElectricMinScore { get; set; } = 80;
+    public int ElectricMinPosts { get; set; } = 5;
+
     // ---- Deletion sync: content removed at the source must not linger here. ----
 
     /// <summary>How often the background job re-checks stored posts against their platform.</summary>
