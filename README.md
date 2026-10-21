@@ -30,7 +30,6 @@ dotnet user-secrets set "Reddit:ClientSecret" "<script app secret>"        # opt
 dotnet user-secrets set "X:BearerToken"      "<X API v2 bearer token>"     # optional
 dotnet user-secrets set "Omdb:ApiKey"        "<omdbapi.com key>"           # optional, unlocks IMDb/RT/Metacritic
 dotnet user-secrets set "Anthropic:ApiKey"   "<console.anthropic.com key>" # optional, context-aware sentiment
-dotnet user-secrets set "Steam:ApiKey"       "<steamcommunity.com/dev/apikey>" # optional, proper library art for new games
 dotnet run --launch-profile https
 ```
 

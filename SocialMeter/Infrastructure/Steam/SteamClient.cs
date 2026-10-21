@@ -3,9 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Options;
 using SocialMeter.Domain.Models;
-using SocialMeter.Options;
 
 namespace SocialMeter.Infrastructure.Steam;
 
@@ -18,21 +16,20 @@ public sealed class SteamClient
 {
     private const string StoreBase = "https://store.steampowered.com/";
     private const string ApiBase = "https://api.steampowered.com/";
-    private const string AssetBase = "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/";
+    private const string StoreAssetRoot = "https://shared.akamai.steamstatic.com/store_item_assets/";
+    private const string AssetBase = StoreAssetRoot + "steam/apps/";
 
     private static readonly TimeSpan DetailsCache = TimeSpan.FromHours(24);
     private static readonly TimeSpan ListCache = TimeSpan.FromMinutes(30);
 
     private readonly HttpClient _http;
     private readonly IMemoryCache _cache;
-    private readonly SteamOptions _options;
     private readonly ILogger<SteamClient> _logger;
 
-    public SteamClient(HttpClient http, IMemoryCache cache, IOptions<SteamOptions> options, ILogger<SteamClient> logger)
+    public SteamClient(HttpClient http, IMemoryCache cache, ILogger<SteamClient> logger)
     {
         _http = http;
         _cache = cache;
-        _options = options.Value;
         _logger = logger;
         _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "SocialMeter/1.0 (+audience sentiment meter)");
         _http.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "en-US,en;q=0.9");
@@ -168,31 +165,31 @@ public sealed class SteamClient
     }
 
     /// <summary>
-    /// With a Web API key, IStoreService/GetItems returns the real library artwork filenames for any game, new or old.
-    /// Returns null without a key or when the call fails; callers fall back to appdetails images.
-    /// Untested until a key is configured — the shape follows Steam's published GetItems response.
+    /// IStoreBrowseService/GetItems (public, no key) returns the hashed filenames of a game's real library artwork —
+    /// the 600×900 capsule and the wide hero — for new and old games alike. appdetails never exposes these.
+    /// Returns null when the call fails; callers fall back to appdetails images.
     /// </summary>
     private async Task<LibraryArt?> GetLibraryArtAsync(int appId, CancellationToken ct)
     {
-        if (!_options.HasApiKey) return null;
-
         try
         {
             var input = $"{{\"ids\":[{{\"appid\":{appId}}}],\"context\":{{\"language\":\"english\",\"country_code\":\"US\"}},\"data_request\":{{\"include_assets\":true}}}}";
-            var url = ApiBase + $"IStoreService/GetItems/v1/?key={Uri.EscapeDataString(_options.ApiKey)}&input_json={Uri.EscapeDataString(input)}";
-            var json = await _http.GetStringAsync(url, ct);
+            var json = await _http.GetStringAsync(ApiBase + $"IStoreBrowseService/GetItems/v1/?input_json={Uri.EscapeDataString(input)}", ct);
             using var doc = JsonDocument.Parse(json);
 
-            var items = doc.RootElement.GetProperty("response").GetProperty("store_items");
-            if (items.GetArrayLength() == 0) return null;
-            var assets = items[0].GetProperty("assets");
+            if (!doc.RootElement.TryGetProperty("response", out var response)
+                || !response.TryGetProperty("store_items", out var items)
+                || items.GetArrayLength() == 0
+                || !items[0].TryGetProperty("assets", out var assets))
+                return null;
 
-            var format = assets.GetProperty("asset_url_format").GetString();
+            // e.g. "steam/apps/4435490/${FILENAME}?t=1792523954" — each asset carries its own hashed sub-path.
+            var format = assets.TryGetProperty("asset_url_format", out var f) ? f.GetString() : null;
             if (string.IsNullOrEmpty(format)) return null;
 
             string? Resolve(string key) =>
-                assets.TryGetProperty(key, out var f) && f.ValueKind == JsonValueKind.String
-                    ? AssetBase.Replace("steam/apps/", "") + format.Replace("${FILENAME}", f.GetString())
+                assets.TryGetProperty(key, out var file) && file.ValueKind == JsonValueKind.String
+                    ? StoreAssetRoot + format.Replace("${FILENAME}", file.GetString())
                     : null;
 
             return new LibraryArt(Resolve("library_capsule_2x") ?? Resolve("library_capsule"), Resolve("library_hero_2x") ?? Resolve("library_hero"));
@@ -243,8 +240,8 @@ public sealed class SteamClient
             MediaType = MediaType.Game,
             Name = CleanName(Str("name") ?? ""),
             Overview = Str("short_description") ?? "",
-            // Portrait art: GetItems (with a key) knows the real capsule for every game; otherwise the legacy
-            // un-hashed path works for older games and 404s for new ones, where the UI falls back to the header.
+            // Portrait art: GetItems knows the real capsule for every game; the legacy un-hashed path is the
+            // last resort (works for older games), and the UI falls back to the header if even that 404s.
             PosterPath = art?.Capsule ?? PosterUrl(appId),
             // Hero: the library hero when known, else the store page background (big, real, hashed URL),
             // else the first screenshot, else the header. All of these come straight from Steam, nothing guessed.
