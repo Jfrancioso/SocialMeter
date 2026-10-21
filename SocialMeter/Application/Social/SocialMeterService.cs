@@ -148,6 +148,45 @@ public sealed class SocialMeterService : ISocialMeterService
                 });
     }
 
+    public async Task<int> RescoreAsync(CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var posts = await _db.SocialPosts.ToListAsync(ct);
+
+        foreach (var p in posts)
+        {
+            var analysis = _sentiment.Analyze(p.Content);
+            p.Sentiment = analysis.Label;
+            p.SentimentScore = analysis.Score;
+
+            // Seeded demo posts are hand-labelled; they keep their trust as-is.
+            if (p.ExternalId.StartsWith("seed-")) continue;
+
+            var trust = _trust.Evaluate(ToCandidate(p), now);
+            p.TrustWeight = trust.Weight;
+            p.Excluded = trust.Excluded;
+            p.ExclusionReason = trust.ExclusionReason;
+        }
+
+        foreach (var group in posts.GroupBy(p => (p.MediaType, p.TmdbId)))
+        {
+            var titlePosts = group.ToList();
+            TrustPolicy.ApplyCrossPostRules(titlePosts, now);
+            var meter = SocialScoreCalculator.Compute(titlePosts, now, _options.MomentumWindowDays);
+
+            var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == group.Key.TmdbId && s.MediaType == group.Key.MediaType, ct);
+            snapshot?.ApplyMeter(meter, snapshot.LastRefreshedAt);
+        }
+
+        await _db.SaveChangesAsync(ct);
+        _logger.LogInformation("Rescored {Count} posts", posts.Count);
+        return posts.Count;
+    }
+
+    private static SocialPostCandidate ToCandidate(SocialPost p) => new(
+        p.Platform, p.ExternalId, p.Author, p.Content, p.Upvotes, p.Comments, p.CreatedAt, p.SourceUrl, p.Community,
+        p.AuthorId, p.AuthorCreatedAt, p.AuthorReputation);
+
     private async Task<SourceStatusDto> IngestAsync(ISocialSource source, Title title, DateTime now, CancellationToken ct)
     {
         if (!source.IsConfigured)

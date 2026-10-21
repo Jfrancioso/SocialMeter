@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
@@ -75,7 +76,8 @@ public sealed class XSource : ISocialSource
                 Platform,
                 t.Id,
                 username,
-                t.Text,
+                // X escapes &, < and > in post text.
+                WebUtility.HtmlDecode(t.Text),
                 t.PublicMetrics?.LikeCount ?? 0,
                 t.PublicMetrics?.ReplyCount ?? 0,
                 t.CreatedAt?.UtcDateTime ?? DateTime.UtcNow,

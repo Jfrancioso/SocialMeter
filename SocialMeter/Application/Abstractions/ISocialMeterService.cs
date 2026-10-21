@@ -12,4 +12,10 @@ public interface ISocialMeterService
 
     /// <summary>Cached readings only; never triggers a fetch. Keys look like "movie:693134".</summary>
     Task<IReadOnlyDictionary<string, SnapshotDto>> GetSnapshotsAsync(IEnumerable<(MediaType MediaType, int TmdbId)> keys, CancellationToken ct = default);
+
+    /// <summary>
+    /// Re-runs sentiment and trust over every stored post and recomputes every snapshot, without contacting
+    /// the sources. Use after changing the lexicon or trust thresholds. Returns the number of posts rescored.
+    /// </summary>
+    Task<int> RescoreAsync(CancellationToken ct = default);
 }

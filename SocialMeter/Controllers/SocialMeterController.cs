@@ -27,6 +27,11 @@ public sealed class SocialMeterController : ControllerBase
     public async Task<ActionResult<DeletionSyncResult>> SyncDeletions(CancellationToken ct)
         => Ok(await _deletionSync.RunAsync(ct));
 
+    /// <summary>Re-scores every stored post with the current sentiment lexicon and trust rules. No source calls, no cost.</summary>
+    [HttpPost("rescore")]
+    public async Task<ActionResult> Rescore(CancellationToken ct)
+        => Ok(new { rescored = await _socialMeter.RescoreAsync(ct) });
+
     /// <summary>The SocialMeter reading for a title. Pass ?refresh=true to re-pull from the social sources now.</summary>
     [HttpGet("{type}/{id:int}")]
     public async Task<ActionResult<SocialMeterResponseDto>> Get([FromRoute] MediaType type, [FromRoute] int id, [FromQuery] bool refresh = false, CancellationToken ct = default)
