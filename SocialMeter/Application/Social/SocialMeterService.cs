@@ -44,12 +44,14 @@ public sealed class SocialMeterService : ISocialMeterService
 
         var now = DateTime.UtcNow;
         var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == tmdbId && s.MediaType == mediaType, ct);
-        var stale = snapshot is null || now - snapshot.LastRefreshedAt > TimeSpan.FromHours(_options.RefreshAfterHours);
+        var sinceRefresh = snapshot is null ? TimeSpan.MaxValue : now - snapshot.LastRefreshedAt;
+        var stale = sinceRefresh > TimeSpan.FromHours(_options.RefreshAfterHours);
+        var recentlyPulled = sinceRefresh < TimeSpan.FromMinutes(_options.MinForcedRefreshMinutes);
 
         var sourceStatus = new List<SourceStatusDto>();
         var fromCache = true;
 
-        if (forceRefresh || stale)
+        if (stale || (forceRefresh && !recentlyPulled))
         {
             fromCache = false;
             foreach (var source in _sources)
@@ -100,7 +102,8 @@ public sealed class SocialMeterService : ISocialMeterService
             TopPosts = top,
             Sources = sourceStatus,
             LastRefreshedAt = snapshot?.LastRefreshedAt ?? now,
-            FromCache = fromCache
+            FromCache = fromCache,
+            NextRefreshAllowedAt = (snapshot?.LastRefreshedAt ?? now).AddMinutes(_options.MinForcedRefreshMinutes)
         };
     }
 

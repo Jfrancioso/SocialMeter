@@ -7,6 +7,12 @@ public sealed class SocialMeterOptions
     /// <summary>A title's score is recomputed from fresh social posts once it is older than this.</summary>
     public int RefreshAfterHours { get; set; } = 6;
 
+    /// <summary>
+    /// A forced refresh (?refresh=true) within this many minutes of the last pull serves the cache instead.
+    /// Each live pull costs X API credits, so this stops a double-tap or a reload loop from spending them.
+    /// </summary>
+    public int MinForcedRefreshMinutes { get; set; } = 15;
+
     /// <summary>How many posts the score endpoint returns inline.</summary>
     public int TopPosts { get; set; } = 12;
 

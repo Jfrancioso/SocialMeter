@@ -19,6 +19,9 @@ public sealed class SocialMeterResponseDto
 
     /// <summary>True when this reading came straight from the cache without contacting the sources.</summary>
     public bool FromCache { get; init; }
+
+    /// <summary>Earliest time a forced refresh will contact the sources again (see SocialMeter:MinForcedRefreshMinutes).</summary>
+    public DateTime NextRefreshAllowedAt { get; init; }
 }
 
 public sealed class SocialPostDto
