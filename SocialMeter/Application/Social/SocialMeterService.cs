@@ -10,6 +10,10 @@ namespace SocialMeter.Application.Social;
 
 public sealed class SocialMeterService : ISocialMeterService
 {
+    // One live pull per title at a time. Two tabs opening a stale title together must not each pay for a pull;
+    // the second waits, re-reads the snapshot the first wrote, and serves it from cache.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(MediaType, int), SemaphoreSlim> PullLocks = new();
+
     private readonly SocialMeterDbContext _db;
     private readonly ITitleService _titles;
     private readonly IEnumerable<ISocialSource> _sources;
@@ -51,29 +55,43 @@ public sealed class SocialMeterService : ISocialMeterService
         if (title is null)
             return null;
 
-        var now = DateTime.UtcNow;
-        var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == tmdbId && s.MediaType == mediaType, ct);
-        var sinceRefresh = snapshot is null ? TimeSpan.MaxValue : now - snapshot.LastRefreshedAt;
-        var stale = sinceRefresh > TimeSpan.FromHours(_options.RefreshAfterHours);
-        var recentlyPulled = sinceRefresh < TimeSpan.FromMinutes(_options.MinForcedRefreshMinutes);
-
         // The gate that bounds the bill: titles outside the tracked set never trigger a pull.
         var trackedReason = await _tracker.GetReasonAsync(mediaType, tmdbId, ct);
         var tracked = trackedReason is not null;
 
         var sourceStatus = new List<SourceStatusDto>();
         var fromCache = true;
+        var now = DateTime.UtcNow;
+        TitleSnapshot? snapshot;
 
-        if (tracked && (stale || (forceRefresh && !recentlyPulled)))
+        var gate = PullLocks.GetOrAdd((mediaType, tmdbId), _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
         {
-            fromCache = false;
-            foreach (var source in _sources)
-                sourceStatus.Add(await IngestAsync(source, title, now, ct));
+            // Read the snapshot inside the lock: a request that waited here sees what the previous one just wrote.
+            snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == tmdbId && s.MediaType == mediaType, ct);
+            var sinceRefresh = snapshot is null ? TimeSpan.MaxValue : now - snapshot.LastRefreshedAt;
+            var stale = sinceRefresh > TimeSpan.FromHours(_options.RefreshAfterHours);
+            var recentlyPulled = sinceRefresh < TimeSpan.FromMinutes(_options.MinForcedRefreshMinutes);
+
+            if (tracked && (stale || (forceRefresh && !recentlyPulled)))
+            {
+                fromCache = false;
+                foreach (var source in _sources)
+                    sourceStatus.Add(await IngestAsync(source, title, now, ct));
+            }
+            else
+            {
+                sourceStatus.AddRange(_sources.Select(s => new SourceStatusDto { Platform = s.Platform, Configured = s.IsConfigured }));
+            }
         }
-        else
+        finally
         {
-            sourceStatus.AddRange(_sources.Select(s => new SourceStatusDto { Platform = s.Platform, Configured = s.IsConfigured }));
+            if (fromCache) gate.Release();
         }
+
+        try
+        {
 
         var posts = await _db.SocialPosts
             .Where(p => p.TmdbId == tmdbId && p.MediaType == mediaType)
@@ -130,6 +148,12 @@ public sealed class SocialMeterService : ISocialMeterService
             FromCache = fromCache,
             NextRefreshAllowedAt = (snapshot?.LastRefreshedAt ?? now).AddMinutes(_options.MinForcedRefreshMinutes)
         };
+        }
+        finally
+        {
+            // A pull holds the lock until its snapshot is saved, so a waiting request reads the fresh one.
+            if (!fromCache) gate.Release();
+        }
     }
 
     public async Task<PagedResult<SocialPostDto>> GetPostsAsync(MediaType mediaType, int tmdbId, Sentiment? sentiment, string? platform, int page, int pageSize, CancellationToken ct = default)
