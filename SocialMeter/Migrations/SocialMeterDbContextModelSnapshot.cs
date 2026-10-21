@@ -30,6 +30,15 @@ namespace SocialMeter.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Analyzer")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("AnalyzerNote")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
                     b.Property<string>("Author")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -131,6 +140,7 @@ namespace SocialMeter.Migrations
                         new
                         {
                             Id = 1,
+                            Analyzer = "seed",
                             Author = "movie_fan_2024",
                             AuthorCreatedAt = new DateTime(2017, 2, 7, 0, 0, 0, 0, DateTimeKind.Utc),
                             AuthorId = "seed-user-1",
@@ -155,6 +165,7 @@ namespace SocialMeter.Migrations
                         new
                         {
                             Id = 2,
+                            Analyzer = "seed",
                             Author = "cinema_critic",
                             AuthorCreatedAt = new DateTime(2017, 3, 16, 0, 0, 0, 0, DateTimeKind.Utc),
                             AuthorId = "seed-user-2",
@@ -179,6 +190,7 @@ namespace SocialMeter.Migrations
                         new
                         {
                             Id = 3,
+                            Analyzer = "seed",
                             Author = "scifi_lover",
                             AuthorCreatedAt = new DateTime(2017, 4, 22, 0, 0, 0, 0, DateTimeKind.Utc),
                             AuthorId = "seed-user-3",
@@ -203,6 +215,7 @@ namespace SocialMeter.Migrations
                         new
                         {
                             Id = 4,
+                            Analyzer = "seed",
                             Author = "casual_viewer",
                             AuthorCreatedAt = new DateTime(2017, 5, 29, 0, 0, 0, 0, DateTimeKind.Utc),
                             AuthorId = "seed-user-4",
@@ -227,6 +240,7 @@ namespace SocialMeter.Migrations
                         new
                         {
                             Id = 5,
+                            Analyzer = "seed",
                             Author = "dune_superfan",
                             AuthorCreatedAt = new DateTime(2017, 7, 5, 0, 0, 0, 0, DateTimeKind.Utc),
                             AuthorId = "seed-user-5",
@@ -251,6 +265,7 @@ namespace SocialMeter.Migrations
                         new
                         {
                             Id = 6,
+                            Analyzer = "seed",
                             Author = "book_reader",
                             AuthorCreatedAt = new DateTime(2017, 8, 11, 0, 0, 0, 0, DateTimeKind.Utc),
                             AuthorId = "seed-user-6",
@@ -275,6 +290,7 @@ namespace SocialMeter.Migrations
                         new
                         {
                             Id = 7,
+                            Analyzer = "seed",
                             Author = "weekend_watcher",
                             AuthorCreatedAt = new DateTime(2017, 9, 17, 0, 0, 0, 0, DateTimeKind.Utc),
                             AuthorId = "seed-user-7",
@@ -299,6 +315,7 @@ namespace SocialMeter.Migrations
                         new
                         {
                             Id = 8,
+                            Analyzer = "seed",
                             Author = "film_student",
                             AuthorCreatedAt = new DateTime(2017, 10, 24, 0, 0, 0, 0, DateTimeKind.Utc),
                             AuthorId = "seed-user-8",
@@ -323,6 +340,7 @@ namespace SocialMeter.Migrations
                         new
                         {
                             Id = 9,
+                            Analyzer = "seed",
                             Author = "history_buff",
                             AuthorCreatedAt = new DateTime(2017, 11, 30, 0, 0, 0, 0, DateTimeKind.Utc),
                             AuthorId = "seed-user-9",
@@ -347,6 +365,7 @@ namespace SocialMeter.Migrations
                         new
                         {
                             Id = 10,
+                            Analyzer = "seed",
                             Author = "action_fan",
                             AuthorCreatedAt = new DateTime(2018, 1, 6, 0, 0, 0, 0, DateTimeKind.Utc),
                             AuthorId = "seed-user-10",

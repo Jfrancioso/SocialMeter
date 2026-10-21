@@ -19,6 +19,7 @@ public sealed partial class TrustPolicy
     public const string ReasonTooShort = "content too short";
     public const string ReasonSameAccount = "additional post from the same account";
     public const string ReasonDuplicate = "duplicate of an earlier post";
+    public const string ReasonOffTopic = "not about this title";
 
     private static readonly HashSet<string> CrossPostReasons = new() { ReasonSameAccount, ReasonDuplicate };
 

@@ -27,6 +27,12 @@ public sealed class SocialPost
     public Sentiment Sentiment { get; set; }
     public double SentimentScore { get; set; }
 
+    /// <summary>Which assessor produced the sentiment ("lexicon", "claude"); lets a better assessor find posts it hasn't read.</summary>
+    public string Analyzer { get; set; } = "lexicon";
+
+    /// <summary>The assessor's short reason, for auditing. Never shown to readers.</summary>
+    public string? AnalyzerNote { get; set; }
+
     /// <summary>0–1 multiplier from the trust policy (account age, reputation, content quality). Never exposed raw.</summary>
     public double TrustWeight { get; set; } = 1;
 

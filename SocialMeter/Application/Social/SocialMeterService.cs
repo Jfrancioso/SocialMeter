@@ -13,7 +13,7 @@ public sealed class SocialMeterService : ISocialMeterService
     private readonly SocialMeterDbContext _db;
     private readonly ITitleService _titles;
     private readonly IEnumerable<ISocialSource> _sources;
-    private readonly ISentimentAnalyzer _sentiment;
+    private readonly IPostAssessor _assessor;
     private readonly TrustPolicy _trust;
     private readonly SocialMeterOptions _options;
     private readonly ILogger<SocialMeterService> _logger;
@@ -22,7 +22,7 @@ public sealed class SocialMeterService : ISocialMeterService
         SocialMeterDbContext db,
         ITitleService titles,
         IEnumerable<ISocialSource> sources,
-        ISentimentAnalyzer sentiment,
+        IPostAssessor assessor,
         TrustPolicy trust,
         IOptions<SocialMeterOptions> options,
         ILogger<SocialMeterService> logger)
@@ -30,7 +30,7 @@ public sealed class SocialMeterService : ISocialMeterService
         _db = db;
         _titles = titles;
         _sources = sources;
-        _sentiment = sentiment;
+        _assessor = assessor;
         _trust = trust;
         _options = options.Value;
         _logger = logger;
@@ -151,29 +151,31 @@ public sealed class SocialMeterService : ISocialMeterService
                 });
     }
 
-    public async Task<int> RescoreAsync(CancellationToken ct = default)
+    public async Task<int> RescoreAsync(bool force, CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
         var posts = await _db.SocialPosts.ToListAsync(ct);
-
-        foreach (var p in posts)
-        {
-            var analysis = _sentiment.Analyze(p.Content);
-            p.Sentiment = analysis.Label;
-            p.SentimentScore = analysis.Score;
-
-            // Seeded demo posts are hand-labelled; they keep their trust as-is.
-            if (p.ExternalId.StartsWith("seed-")) continue;
-
-            var trust = _trust.Evaluate(ToCandidate(p), now);
-            p.TrustWeight = trust.Weight;
-            p.Excluded = trust.Excluded;
-            p.ExclusionReason = trust.ExclusionReason;
-        }
+        var assessed = 0;
 
         foreach (var group in posts.GroupBy(p => (p.MediaType, p.TmdbId)))
         {
             var titlePosts = group.ToList();
+
+            // Seeded demo posts are hand-labelled and never re-assessed.
+            var toAssess = titlePosts
+                .Where(p => !p.ExternalId.StartsWith("seed-") && (force || p.Analyzer != _assessor.Name))
+                .ToList();
+
+            if (toAssess.Count > 0)
+            {
+                var title = await _titles.GetDetailsAsync(group.Key.MediaType, group.Key.TmdbId, ct)
+                            ?? new Title { TmdbId = group.Key.TmdbId, MediaType = group.Key.MediaType, Name = "" };
+                var results = await _assessor.AssessAsync(title, toAssess.Select(ToCandidate).ToList(), ct);
+                for (var i = 0; i < toAssess.Count; i++)
+                    Apply(toAssess[i], results[i], _trust.Evaluate(ToCandidate(toAssess[i]), now));
+                assessed += toAssess.Count;
+            }
+
             TrustPolicy.ApplyCrossPostRules(titlePosts, now);
             var meter = SocialScoreCalculator.Compute(titlePosts, now, _options.MomentumWindowDays);
 
@@ -182,8 +184,35 @@ public sealed class SocialMeterService : ISocialMeterService
         }
 
         await _db.SaveChangesAsync(ct);
-        _logger.LogInformation("Rescored {Count} posts", posts.Count);
-        return posts.Count;
+        _logger.LogInformation("Rescored {Assessed} of {Total} posts with {Assessor}", assessed, posts.Count, _assessor.Name);
+        return assessed;
+    }
+
+    /// <summary>Writes an assessment plus trust verdict onto a post. Trust exclusions win; otherwise an off-topic post is excluded.</summary>
+    private void Apply(SocialPost post, PostAssessment assessment, TrustVerdict trust)
+    {
+        var result = assessment.ToResult();
+        post.Sentiment = result.Label;
+        post.SentimentScore = result.Score;
+        post.Analyzer = _assessor.Name;
+        post.AnalyzerNote = assessment.Note is null ? null : Trim(assessment.Note, 120);
+        post.TrustWeight = trust.Weight;
+
+        if (trust.Excluded)
+        {
+            post.Excluded = true;
+            post.ExclusionReason = trust.ExclusionReason;
+        }
+        else if (!assessment.AboutTitle)
+        {
+            post.Excluded = true;
+            post.ExclusionReason = TrustPolicy.ReasonOffTopic;
+        }
+        else
+        {
+            post.Excluded = false;
+            post.ExclusionReason = null;
+        }
     }
 
     private static SocialPostCandidate ToCandidate(SocialPost p) => new(
@@ -214,14 +243,14 @@ public sealed class SocialMeterService : ISocialMeterService
             .Where(p => p.Platform == source.Platform && externalIds.Contains(p.ExternalId))
             .ToDictionaryAsync(p => p.ExternalId, ct);
 
+        // Upsert first, then assess only what the current assessor hasn't read — re-reading costs tokens.
+        var toAssess = new List<SocialPost>();
         foreach (var c in candidates)
         {
-            var analysis = _sentiment.Analyze(c.Content);
-            var trust = _trust.Evaluate(c, now);
-
             if (existing.TryGetValue(c.ExternalId, out var post))
             {
                 // Engagement, account standing and (edited) text keep moving after a post is first seen; keep them current.
+                var edited = post.Content != c.Content;
                 post.Upvotes = c.Upvotes;
                 post.Comments = c.Comments;
                 post.Content = c.Content;
@@ -229,16 +258,21 @@ public sealed class SocialMeterService : ISocialMeterService
                 post.AuthorId ??= c.AuthorId;
                 post.AuthorCreatedAt ??= c.AuthorCreatedAt;
                 post.AuthorReputation = c.AuthorReputation ?? post.AuthorReputation;
-                post.Sentiment = analysis.Label;
-                post.SentimentScore = analysis.Score;
-                post.TrustWeight = trust.Weight;
-                post.Excluded = trust.Excluded;
-                post.ExclusionReason = trust.ExclusionReason;
                 post.FetchedAt = now;
+
+                if (edited || post.Analyzer != _assessor.Name)
+                    toAssess.Add(post);
+                else
+                {
+                    var trust = _trust.Evaluate(c, now);
+                    post.TrustWeight = trust.Weight;
+                    if (trust.Excluded) { post.Excluded = true; post.ExclusionReason = trust.ExclusionReason; }
+                    else if (post.ExclusionReason == TrustPolicy.ReasonTooNew || post.ExclusionReason == TrustPolicy.ReasonTooShort) { post.Excluded = false; post.ExclusionReason = null; }
+                }
                 continue;
             }
 
-            _db.SocialPosts.Add(new SocialPost
+            var fresh = new SocialPost
             {
                 TmdbId = title.TmdbId,
                 MediaType = title.MediaType,
@@ -250,18 +284,22 @@ public sealed class SocialMeterService : ISocialMeterService
                 AuthorReputation = c.AuthorReputation,
                 Content = c.Content,
                 ContentHash = TrustPolicy.ContentHash(c.Content),
-                Sentiment = analysis.Label,
-                SentimentScore = analysis.Score,
-                TrustWeight = trust.Weight,
-                Excluded = trust.Excluded,
-                ExclusionReason = trust.ExclusionReason,
                 Upvotes = c.Upvotes,
                 Comments = c.Comments,
                 CreatedAt = c.CreatedAt,
                 FetchedAt = now,
                 SourceUrl = c.SourceUrl is null ? null : Trim(c.SourceUrl, 500),
                 Community = c.Community is null ? null : Trim(c.Community, 100)
-            });
+            };
+            _db.SocialPosts.Add(fresh);
+            toAssess.Add(fresh);
+        }
+
+        if (toAssess.Count > 0)
+        {
+            var assessments = await _assessor.AssessAsync(title, toAssess.Select(ToCandidate).ToList(), ct);
+            for (var i = 0; i < toAssess.Count; i++)
+                Apply(toAssess[i], assessments[i], _trust.Evaluate(ToCandidate(toAssess[i]), now));
         }
 
         await _db.SaveChangesAsync(ct);

@@ -14,8 +14,9 @@ public interface ISocialMeterService
     Task<IReadOnlyDictionary<string, SnapshotDto>> GetSnapshotsAsync(IEnumerable<(MediaType MediaType, int TmdbId)> keys, CancellationToken ct = default);
 
     /// <summary>
-    /// Re-runs sentiment and trust over every stored post and recomputes every snapshot, without contacting
-    /// the sources. Use after changing the lexicon or trust thresholds. Returns the number of posts rescored.
+    /// Re-assesses stored posts and recomputes every snapshot, without contacting the sources.
+    /// By default only posts the current assessor hasn't read yet are sent to it (cheap); <paramref name="force"/>
+    /// re-assesses everything. Returns the number of posts assessed.
     /// </summary>
-    Task<int> RescoreAsync(CancellationToken ct = default);
+    Task<int> RescoreAsync(bool force, CancellationToken ct = default);
 }

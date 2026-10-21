@@ -9,7 +9,10 @@ TV shows, scored from public conversation on Reddit and X and shown beside TMDB,
 
 - **Read-only.** The app never posts, comments, votes or messages on any platform.
 - **Two calls per title per six hours.** A title search plus one batched author lookup, cached in `TitleSnapshots`.
-- **Rule-based sentiment.** A word lexicon (`LexiconSentimentAnalyzer`) — no machine-learning model is trained on platform data.
+- **Sentiment in context.** With `Anthropic:ApiKey` set, Claude reads each post against the title and answers two
+  questions — is this post actually about *this* title, and how does the author feel about *it* (not about a bot,
+  another film, or the weather)? Off-topic posts are excluded. Without a key, a word lexicon scores tone. Nothing is
+  trained on platform data; posts are sent for inference only.
 - **Trust-weighted.** Account age and reputation discount throwaway accounts; one counted post per account per title;
   duplicate text collapses to one (`TrustPolicy`). Thresholds are server-side only.
 - **Deletion sync.** `DeletionSyncService` re-checks stored posts against the platform (Reddit `/api/info`, X tweet lookup)
@@ -26,6 +29,7 @@ dotnet user-secrets set "Reddit:ClientId"    "<script app client id>"      # opt
 dotnet user-secrets set "Reddit:ClientSecret" "<script app secret>"        # optional
 dotnet user-secrets set "X:BearerToken"      "<X API v2 bearer token>"     # optional
 dotnet user-secrets set "Omdb:ApiKey"        "<omdbapi.com key>"           # optional, unlocks IMDb/RT/Metacritic
+dotnet user-secrets set "Anthropic:ApiKey"   "<console.anthropic.com key>" # optional, context-aware sentiment
 dotnet run --launch-profile https
 ```
 

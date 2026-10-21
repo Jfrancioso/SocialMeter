@@ -6,6 +6,8 @@ using SocialMeter.Application.Abstractions;
 using SocialMeter.Application.Ratings;
 using SocialMeter.Application.Social;
 using SocialMeter.Application.Titles;
+using Anthropic;
+using SocialMeter.Infrastructure.Anthropic;
 using SocialMeter.Infrastructure.Data;
 using SocialMeter.Infrastructure.Links;
 using SocialMeter.Infrastructure.Omdb;
@@ -28,6 +30,7 @@ builder.Services.Configure<RedditOptions>(builder.Configuration.GetSection(Reddi
 builder.Services.Configure<XOptions>(builder.Configuration.GetSection(XOptions.SectionName));
 builder.Services.Configure<OmdbOptions>(builder.Configuration.GetSection(OmdbOptions.SectionName));
 builder.Services.Configure<SocialMeterOptions>(builder.Configuration.GetSection(SocialMeterOptions.SectionName));
+builder.Services.Configure<AnthropicOptions>(builder.Configuration.GetSection(AnthropicOptions.SectionName));
 
 // ---- External clients ----
 builder.Services.AddHttpClient<TmdbClient>((sp, http) =>
@@ -51,6 +54,15 @@ builder.Services.AddScoped<IRatingsService, RatingsService>();
 builder.Services.AddScoped<ISocialMeterService, SocialMeterService>();
 builder.Services.AddSingleton<ISentimentAnalyzer, LexiconSentimentAnalyzer>();
 builder.Services.AddSingleton<TrustPolicy>();
+
+// Post assessment: Claude reads posts in context (is it about this title? how does the author feel about *it*?)
+// when an API key is configured; otherwise the word lexicon scores tone on its own.
+builder.Services.AddSingleton<LexiconPostAssessorFallback>();
+builder.Services.AddSingleton(sp => new AnthropicClient { ApiKey = sp.GetRequiredService<IOptions<AnthropicOptions>>().Value.ApiKey });
+builder.Services.AddSingleton<IPostAssessor>(sp =>
+    sp.GetRequiredService<IOptions<AnthropicOptions>>().Value.IsConfigured
+        ? ActivatorUtilities.CreateInstance<ClaudePostAssessor>(sp)
+        : sp.GetRequiredService<LexiconPostAssessorFallback>().Inner);
 builder.Services.AddScoped<DeletionSyncService>();
 builder.Services.AddHostedService<DeletionSyncWorker>();
 

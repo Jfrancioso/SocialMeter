@@ -30,6 +30,8 @@ public class SocialMeterDbContext : DbContext
             entity.Property(e => e.Content).IsRequired();
             entity.Property(e => e.ContentHash).IsRequired().HasMaxLength(32);
             entity.Property(e => e.Sentiment).HasConversion<string>().HasMaxLength(10).IsRequired();
+            entity.Property(e => e.Analyzer).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.AnalyzerNote).HasMaxLength(120);
             entity.Property(e => e.ExclusionReason).HasMaxLength(60);
             entity.Property(e => e.SourceUrl).HasMaxLength(500);
             entity.Property(e => e.Community).HasMaxLength(100);
@@ -73,6 +75,7 @@ public class SocialMeterDbContext : DbContext
             ContentHash = TrustPolicy.ContentHash(content),
             Sentiment = sentiment,
             SentimentScore = score,
+            Analyzer = "seed",
             TrustWeight = 1,
             Excluded = false,
             Upvotes = upvotes,
