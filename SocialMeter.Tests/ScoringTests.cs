@@ -17,7 +17,7 @@ public class ScoringTests
     [Fact]
     public void No_posts_is_no_signal_at_fifty()
     {
-        var m = SocialScoreCalculator.Compute(Array.Empty<SocialPost>(), Now, 14);
+        var m = SocialScoreCalculator.Compute(Array.Empty<SocialPost>(), Now);
         Assert.Equal(50, m.Score);
         Assert.Equal("No signal", m.Label);
         Assert.Equal(0, m.Confidence);
@@ -26,8 +26,9 @@ public class ScoringTests
     [Fact]
     public void All_positive_is_electric_and_all_negative_is_cold()
     {
-        var hot = SocialScoreCalculator.Compute(Enumerable.Range(0, 10).Select(_ => P(0.9)).ToList(), Now, 14);
-        var cold = SocialScoreCalculator.Compute(Enumerable.Range(0, 10).Select(_ => P(-0.9)).ToList(), Now, 14);
+        // Twenty unanimous posts clear the pull toward neutral; a handful would only reach Hot.
+        var hot = SocialScoreCalculator.Compute(Enumerable.Range(0, 20).Select(_ => P(0.9)).ToList(), Now);
+        var cold = SocialScoreCalculator.Compute(Enumerable.Range(0, 20).Select(_ => P(-0.9)).ToList(), Now);
         Assert.Equal("Electric", hot.Label);
         Assert.Equal("Cold", cold.Label);
     }
@@ -35,10 +36,10 @@ public class ScoringTests
     [Fact]
     public void Excluded_posts_never_count_but_are_reported()
     {
-        var m = SocialScoreCalculator.Compute(new[] { P(0.9), P(-0.9, excluded: true), P(-0.9, excluded: true) }, Now, 14);
+        var m = SocialScoreCalculator.Compute(new[] { P(0.9), P(-0.9, excluded: true), P(-0.9, excluded: true) }, Now);
         Assert.Equal(1, m.TotalPosts);
         Assert.Equal(2, m.FilteredPosts);
-        Assert.True(m.Score > 80);
+        Assert.True(m.Score > 50);
     }
 
     [Fact]
@@ -46,7 +47,7 @@ public class ScoringTests
     {
         var viral = P(-0.9, upvotes: 100_000);
         var crowd = Enumerable.Range(0, 20).Select(_ => P(0.8, upvotes: 10)).ToList();
-        var m = SocialScoreCalculator.Compute(crowd.Append(viral).ToList(), Now, 14);
+        var m = SocialScoreCalculator.Compute(crowd.Append(viral).ToList(), Now);
         Assert.True(m.Score > 50, $"a single viral post flipped the meter to {m.Score}");
     }
 
@@ -56,7 +57,7 @@ public class ScoringTests
         // Same counts, same engagement: five "10/10" against five detailed negative takes should lean negative.
         var quick = Enumerable.Range(0, 5).Select(_ => P(0.9, substance: 0.1)).ToList();
         var detailed = Enumerable.Range(0, 5).Select(_ => P(-0.8, substance: 0.9)).ToList();
-        var m = SocialScoreCalculator.Compute(quick.Concat(detailed).ToList(), Now, 14);
+        var m = SocialScoreCalculator.Compute(quick.Concat(detailed).ToList(), Now);
         Assert.True(m.Score < 50, $"expected the detailed takes to win, got {m.Score}");
         Assert.Equal(5, m.DetailedPosts);
     }
@@ -66,35 +67,47 @@ public class ScoringTests
     {
         var trusted = P(-0.8, trust: 1);
         var sketchy = Enumerable.Range(0, 3).Select(_ => P(0.8, trust: 0.2)).ToList();
-        var m = SocialScoreCalculator.Compute(sketchy.Append(trusted).ToList(), Now, 14);
+        var m = SocialScoreCalculator.Compute(sketchy.Append(trusted).ToList(), Now);
         Assert.True(m.Score < 50);
     }
 
     [Fact]
     public void Confidence_grows_with_trust_weighted_volume()
     {
-        var few = SocialScoreCalculator.Compute(Enumerable.Range(0, 4).Select(_ => P(0.5)).ToList(), Now, 14);
-        var many = SocialScoreCalculator.Compute(Enumerable.Range(0, 40).Select(_ => P(0.5)).ToList(), Now, 14);
-        var manyWeak = SocialScoreCalculator.Compute(Enumerable.Range(0, 40).Select(_ => P(0.5, trust: 0.1)).ToList(), Now, 14);
+        var few = SocialScoreCalculator.Compute(Enumerable.Range(0, 4).Select(_ => P(0.5)).ToList(), Now);
+        var many = SocialScoreCalculator.Compute(Enumerable.Range(0, 40).Select(_ => P(0.5)).ToList(), Now);
+        var manyWeak = SocialScoreCalculator.Compute(Enumerable.Range(0, 40).Select(_ => P(0.5, trust: 0.1)).ToList(), Now);
         Assert.Equal("low", few.ConfidenceLabel);
         Assert.Equal("high", many.ConfidenceLabel);
         Assert.Equal("low", manyWeak.ConfidenceLabel);
     }
 
     [Fact]
-    public void Momentum_compares_recent_posts_to_the_whole()
+    public void A_handful_of_posts_is_pulled_toward_neutral_with_a_wide_margin()
     {
-        var old = Enumerable.Range(0, 10).Select(_ => P(-0.6, ageDays: 60)).ToList();
-        var recent = Enumerable.Range(0, 5).Select(_ => P(0.8, ageDays: 2)).ToList();
-        var m = SocialScoreCalculator.Compute(old.Concat(recent).ToList(), Now, 14);
-        Assert.NotNull(m.Momentum);
-        Assert.True(m.Momentum > 0);
+        var few = SocialScoreCalculator.Compute(Enumerable.Range(0, 3).Select(_ => P(0.9)).ToList(), Now);
+        var many = SocialScoreCalculator.Compute(Enumerable.Range(0, 60).Select(_ => P(0.9)).ToList(), Now);
+        Assert.True(few.Score < 70, $"three posts scored {few.Score}");
+        Assert.True(many.Score > 85, $"sixty posts scored {many.Score}");
+        Assert.True(few.Stats.Margin > many.Stats.Margin);
+        Assert.True(few.Stats.PriorPull < 0, "the prior should have pulled a glowing trio down");
+        Assert.Equal(95, few.Stats.RawScore);
+        Assert.Equal(few.Score - few.Stats.Margin, few.Stats.Lower);
+    }
+
+    [Fact]
+    public void Effective_posts_discount_weak_trust_and_one_dominant_post()
+    {
+        var weak = SocialScoreCalculator.Compute(Enumerable.Range(0, 40).Select(_ => P(0.5, trust: 0.1)).ToList(), Now);
+        var dominated = SocialScoreCalculator.Compute(Enumerable.Range(0, 10).Select(_ => P(0.5)).Append(P(0.5, upvotes: 1_000_000)).ToList(), Now);
+        Assert.True(weak.Stats.EffectivePosts < 5, $"forty weak posts counted as {weak.Stats.EffectivePosts}");
+        Assert.True(dominated.Stats.EffectivePosts < 10, $"one viral post among ten counted as {dominated.Stats.EffectivePosts}");
     }
 
     [Fact]
     public void Platforms_are_summarised_separately()
     {
-        var m = SocialScoreCalculator.Compute(new[] { P(0.9, platform: "steam"), P(0.9, platform: "steam"), P(-0.9, platform: "x") }, Now, 14);
+        var m = SocialScoreCalculator.Compute(new[] { P(0.9, platform: "steam"), P(0.9, platform: "steam"), P(-0.9, platform: "x") }, Now);
         Assert.Equal(2, m.Platforms.Count);
         Assert.Equal("steam", m.Platforms[0].Platform);
         Assert.True(m.Platforms.Single(p => p.Platform == "x").Score < 50);

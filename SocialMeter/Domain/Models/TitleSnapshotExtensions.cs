@@ -13,7 +13,9 @@ public static class TitleSnapshotExtensions
         snapshot.Positive = meter.Breakdown.Positive;
         snapshot.Neutral = meter.Breakdown.Neutral;
         snapshot.Negative = meter.Breakdown.Negative;
-        snapshot.Momentum = meter.Momentum;
+        snapshot.RawScore = meter.Stats.RawScore;
+        snapshot.EffectivePosts = meter.Stats.EffectivePosts;
+        snapshot.Margin = meter.Stats.Margin;
         snapshot.LastRefreshedAt = refreshedAt;
     }
 }

@@ -22,6 +22,55 @@ namespace SocialMeter.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("SocialMeter.Domain.Models.ScoreHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly>("Day")
+                        .HasColumnType("date");
+
+                    b.Property<double>("EffectivePosts")
+                        .HasColumnType("float");
+
+                    b.Property<int>("Margin")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("RawScore")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Reconstructed")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TmdbId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TotalPosts")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TmdbId", "MediaType", "Day")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ScoreHistory_Title_Day");
+
+                    b.ToTable("ScoreHistory", (string)null);
+                });
+
             modelBuilder.Entity("SocialMeter.Domain.Models.SocialPost", b =>
                 {
                     b.Property<int>("Id")
@@ -439,6 +488,9 @@ namespace SocialMeter.Migrations
                     b.Property<double>("Confidence")
                         .HasColumnType("float");
 
+                    b.Property<double>("EffectivePosts")
+                        .HasColumnType("float");
+
                     b.Property<int>("FilteredPosts")
                         .HasColumnType("int");
 
@@ -450,13 +502,13 @@ namespace SocialMeter.Migrations
                     b.Property<DateTime>("LastRefreshedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("Margin")
+                        .HasColumnType("int");
+
                     b.Property<string>("MediaType")
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
-
-                    b.Property<int?>("Momentum")
-                        .HasColumnType("int");
 
                     b.Property<int>("Negative")
                         .HasColumnType("int");
@@ -465,6 +517,9 @@ namespace SocialMeter.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("Positive")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RawScore")
                         .HasColumnType("int");
 
                     b.Property<int>("Score")

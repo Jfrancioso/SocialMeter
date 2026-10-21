@@ -21,8 +21,11 @@ public sealed class TitleSnapshot
     public int Neutral { get; set; }
     public int Negative { get; set; }
 
-    /// <summary>Score change between recent posts and the overall score; null when there is not enough recent data.</summary>
-    public int? Momentum { get; set; }
+    public int RawScore { get; set; }
+    public double EffectivePosts { get; set; }
+
+    /// <summary>95 % half-width in points.</summary>
+    public int Margin { get; set; } = 50;
 
     public DateTime LastRefreshedAt { get; set; }
 }

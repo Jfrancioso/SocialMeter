@@ -17,6 +17,7 @@ public sealed class SocialMeterService : ISocialMeterService
     private readonly VerdictAssessor _verdicts;
     private readonly ITitleTracker _tracker;
     private readonly TrustPolicy _trust;
+    private readonly ScoreHistoryService _history;
     private readonly SocialMeterOptions _options;
     private readonly ILogger<SocialMeterService> _logger;
 
@@ -28,6 +29,7 @@ public sealed class SocialMeterService : ISocialMeterService
         VerdictAssessor verdicts,
         ITitleTracker tracker,
         TrustPolicy trust,
+        ScoreHistoryService history,
         IOptions<SocialMeterOptions> options,
         ILogger<SocialMeterService> logger)
     {
@@ -38,6 +40,7 @@ public sealed class SocialMeterService : ISocialMeterService
         _verdicts = verdicts;
         _tracker = tracker;
         _trust = trust;
+        _history = history;
         _options = options.Value;
         _logger = logger;
     }
@@ -82,7 +85,7 @@ public sealed class SocialMeterService : ISocialMeterService
             TrustPolicy.ApplyCrossPostRules(posts, now);
         }
 
-        var meter = SocialScoreCalculator.Compute(posts, now, _options.MomentumWindowDays);
+        var meter = SocialScoreCalculator.Compute(posts, now, _options.Scoring);
 
         if (!fromCache)
         {
@@ -92,15 +95,25 @@ public sealed class SocialMeterService : ISocialMeterService
             var configured = sourceStatus.Where(s => s.Configured).ToList();
             var allFailed = configured.Count > 0 && configured.All(s => s.Error is not null);
             snapshot.ApplyMeter(meter, allFailed ? now.AddHours(-_options.RefreshAfterHours).AddMinutes(10) : now);
+            await _history.RecordAsync(mediaType, tmdbId, meter, now, ct);
 
             await _db.SaveChangesAsync(ct);
         }
+        else if (snapshot is not null && (snapshot.Score != meter.Score || snapshot.Margin != meter.Stats.Margin || snapshot.TotalPosts != meter.TotalPosts))
+        {
+            // The maths changed (or posts were re-read) since the snapshot was written: bring the cache and today's history
+            // row in line with what the page is about to show, without pretending the sources were contacted.
+            snapshot.ApplyMeter(meter, snapshot.LastRefreshedAt);
+            await _history.RecordAsync(mediaType, tmdbId, meter, now, ct);
+            await _db.SaveChangesAsync(ct);
+        }
 
-        var top = posts
-            .Where(p => !p.Excluded)
+        var counted = posts.Where(p => !p.Excluded).ToList();
+        var totalWeight = counted.Sum(p => SocialScoreCalculator.Weight(p, now));
+        var top = counted
             .OrderByDescending(p => SocialScoreCalculator.Weight(p, now))
             .Take(_options.TopPosts)
-            .Select(SocialPostDto.From)
+            .Select(p => SocialPostDto.From(p, Share(p, totalWeight, now)))
             .ToList();
 
         return new SocialMeterResponseDto
@@ -136,8 +149,110 @@ public sealed class SocialMeterService : ISocialMeterService
             .Take(pageSize)
             .ToListAsync(ct);
 
-        return new PagedResult<SocialPostDto>(items.Select(SocialPostDto.From).ToList(), page, (int)Math.Ceiling(total / (double)pageSize), total);
+        // Each post's share of the whole title's weight, so the card can say "4 % of this score".
+        var now = DateTime.UtcNow;
+        var totalWeight = (await _db.SocialPosts
+                .Where(p => p.TmdbId == tmdbId && p.MediaType == mediaType && !p.Excluded)
+                .Select(p => new SocialPost { Upvotes = p.Upvotes, Comments = p.Comments, CreatedAt = p.CreatedAt, TrustWeight = p.TrustWeight, Substance = p.Substance })
+                .ToListAsync(ct))
+            .Sum(p => SocialScoreCalculator.Weight(p, now));
+
+        return new PagedResult<SocialPostDto>(
+            items.Select(p => SocialPostDto.From(p, Share(p, totalWeight, now))).ToList(),
+            page, (int)Math.Ceiling(total / (double)pageSize), total);
     }
+
+    private static double? Share(SocialPost p, double totalWeight, DateTime now)
+        => totalWeight > 0 ? 100 * SocialScoreCalculator.Weight(p, now) / totalWeight : null;
+
+    public async Task<ScoreExplanationDto?> ExplainAsync(MediaType mediaType, int tmdbId, CancellationToken ct = default)
+    {
+        var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == tmdbId && s.MediaType == mediaType, ct);
+        if (snapshot is null) return null;
+
+        var now = DateTime.UtcNow;
+        var all = await _db.SocialPosts.Where(p => p.TmdbId == tmdbId && p.MediaType == mediaType).ToListAsync(ct);
+        var meter = SocialScoreCalculator.Compute(all, now, _options.Scoring);
+        var counted = all.Where(p => !p.Excluded).ToList();
+        var weights = counted.ToDictionary(p => p.Id, p => SocialScoreCalculator.Weight(p, now));
+        var totalWeight = weights.Values.Sum();
+        double Pct(IEnumerable<SocialPost> ps) => totalWeight > 0 ? Math.Round(100 * ps.Sum(p => weights[p.Id]) / totalWeight, 1) : 0;
+
+        var mix = new[] { "bare", "some", "detailed" }
+            .Select(level => new { level, ps = counted.Where(p => SocialPostDto.SubstanceLevelFor(p.Substance) == level).ToList() })
+            .Select(g => new MixDto { Level = g.level, Posts = g.ps.Count, WeightShare = Pct(g.ps) })
+            .ToList();
+
+        var drivers = counted
+            .OrderByDescending(p => weights[p.Id])
+            .Take(6)
+            .Select(p => new DriverDto
+            {
+                Id = p.Id,
+                Platform = p.Platform,
+                Author = p.Author,
+                Excerpt = Trim(p.Content.ReplaceLineEndings(" "), 140),
+                Sentiment = p.Sentiment,
+                SentimentScore = Math.Round(p.SentimentScore, 2),
+                SubstanceLevel = SocialPostDto.SubstanceLevelFor(p.Substance),
+                TrustLevel = SocialPostDto.TrustLevelFor(p.TrustWeight),
+                WeightShare = Pct(new[] { p }),
+                CreatedAt = p.CreatedAt,
+                SourceUrl = p.SourceUrl
+            })
+            .ToList();
+
+        var platforms = meter.Platforms
+            .Select(ps => new PlatformShareDto { Platform = ps.Platform, Posts = ps.Posts, Score = ps.Score, WeightShare = Pct(counted.Where(p => p.Platform == ps.Platform)) })
+            .ToList();
+
+        var filtered = all.Where(p => p.Excluded)
+            .GroupBy(p => p.ExclusionReason ?? "set aside")
+            .Select(g => new ReasonCountDto { Reason = g.Key, Count = g.Count() })
+            .OrderByDescending(r => r.Count)
+            .ToList();
+
+        var notes = new List<string>();
+        var k = _options.PriorStrength;
+        if (counted.Count > 0 && meter.Stats.EffectivePosts < k)
+            notes.Add($"Fewer than {k:0} effective posts, so the neutral prior still carries {1 - meter.Confidence:P0} of the score.");
+        if (counted.Count > 0 && meter.Stats.PriorPull != 0)
+            notes.Add($"The raw weighted mean is {meter.Stats.RawScore}; the pull toward neutral moved it {Math.Abs(meter.Stats.PriorPull)} point{(Math.Abs(meter.Stats.PriorPull) == 1 ? "" : "s")} {(meter.Stats.PriorPull > 0 ? "up" : "down")}.");
+        if (drivers.Count > 0 && drivers[0].WeightShare >= 20)
+            notes.Add($"One post carries {drivers[0].WeightShare:0}% of the weight.");
+        var detailed = mix.Single(m => m.Level == "detailed");
+        if (counted.Count > 0)
+            notes.Add($"Posts with specifics are {detailed.Posts} of {counted.Count} but carry {detailed.WeightShare:0}% of the weight.");
+        if (platforms.Count > 1 && platforms.Max(p => p.Score) - platforms.Min(p => p.Score) >= 15)
+            notes.Add($"Platforms disagree: {string.Join(", ", platforms.Select(p => $"{PlatformName(p.Platform)} {p.Score}"))}.");
+
+        return new ScoreExplanationDto
+        {
+            Score = meter.Score,
+            Label = meter.Label,
+            Stats = meter.Stats,
+            Confidence = meter.Confidence,
+            ConfidenceLabel = meter.ConfidenceLabel,
+            TotalPosts = meter.TotalPosts,
+            FilteredPosts = meter.FilteredPosts,
+            SentimentWeight = new ShareDto
+            {
+                Positive = Pct(counted.Where(p => p.Sentiment == Sentiment.Positive)),
+                Neutral = Pct(counted.Where(p => p.Sentiment == Sentiment.Neutral)),
+                Negative = Pct(counted.Where(p => p.Sentiment == Sentiment.Negative))
+            },
+            SubstanceMix = mix,
+            Platforms = platforms,
+            Drivers = drivers,
+            Filtered = filtered,
+            Notes = notes
+        };
+    }
+
+    public Task<ScoreHistoryDto> GetHistoryAsync(MediaType mediaType, int tmdbId, int days, CancellationToken ct = default)
+        => _history.GetAsync(mediaType, tmdbId, days, DateTime.UtcNow, ct);
+
+    private static string PlatformName(string platform) => platform switch { "x" => "X", "reddit" => "Reddit", "steam" => "Steam", _ => platform };
 
     public async Task<IReadOnlyDictionary<string, SnapshotDto>> GetSnapshotsAsync(IEnumerable<(MediaType MediaType, int TmdbId)> keys, CancellationToken ct = default)
     {
@@ -159,7 +274,7 @@ public sealed class SocialMeterService : ISocialMeterService
                     Label = s.Label,
                     TotalPosts = s.TotalPosts,
                     Confidence = s.Confidence,
-                    Momentum = s.Momentum
+                    Margin = s.Margin
                 });
     }
 
@@ -187,10 +302,14 @@ public sealed class SocialMeterService : ISocialMeterService
             }
 
             TrustPolicy.ApplyCrossPostRules(titlePosts, now);
-            var meter = SocialScoreCalculator.Compute(titlePosts, now, _options.MomentumWindowDays);
+            var meter = SocialScoreCalculator.Compute(titlePosts, now, _options.Scoring);
 
             var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == group.Key.TmdbId && s.MediaType == group.Key.MediaType, ct);
-            snapshot?.ApplyMeter(meter, snapshot.LastRefreshedAt);
+            if (snapshot is not null)
+            {
+                snapshot.ApplyMeter(meter, snapshot.LastRefreshedAt);
+                await _history.RecordAsync(group.Key.MediaType, group.Key.TmdbId, meter, now, ct);
+            }
         }
 
         await _db.SaveChangesAsync(ct);

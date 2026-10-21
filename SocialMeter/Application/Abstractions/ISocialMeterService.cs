@@ -19,4 +19,10 @@ public interface ISocialMeterService
     /// re-assesses everything. Returns the number of posts assessed.
     /// </summary>
     Task<int> RescoreAsync(bool force, CancellationToken ct = default);
+
+    /// <summary>The numbers behind the cached reading: weight shares, substance mix, top drivers. Never contacts the sources.</summary>
+    Task<ScoreExplanationDto?> ExplainAsync(MediaType mediaType, int tmdbId, CancellationToken ct = default);
+
+    /// <summary>Daily readings and the trend verdict for the last <paramref name="days"/> days.</summary>
+    Task<ScoreHistoryDto> GetHistoryAsync(MediaType mediaType, int tmdbId, int days, CancellationToken ct = default);
 }

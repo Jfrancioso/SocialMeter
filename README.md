@@ -20,6 +20,14 @@ TV shows, scored from public conversation on Reddit and X and shown beside TMDB,
   scores. Runs every `DeletionSyncHours` via `DeletionSyncWorker`; `POST /api/socialmeter/sync-deletions` runs it now.
 - **No profiling.** Nothing is inferred about users beyond sentiment toward a title; data is never sold or shared.
 
+## How the number is made
+
+`SocialScoreCalculator` is a weighted mean (engagement × recency × trust × substance) pulled toward neutral by a
+Bayesian average, with a Student-t 95 % interval; `ScoreStatistics` holds the maths (Kish effective sample size,
+weighted standard error, Mann-Kendall trend test with Sen's slope). `ScoreHistoryService` keeps one reading per title
+per day, reconstructs the past from post dates for titles with no history yet, and runs the trend test. The
+UI's "how it works" page publishes the method with a worked example; only the trust cut-offs stay private.
+
 ## Running it
 
 ```bash
@@ -61,5 +69,7 @@ Change the prompt, run the eval, read the report — that is the loop. Add a cas
 | `GET /api/titles/{type}/{id}/ratings` | Other sites' ratings, normalized to 0–100 |
 | `GET /api/socialmeter/{type}/{id}` | The SocialMeter reading (`?refresh=true` re-pulls from sources) |
 | `GET /api/socialmeter/{type}/{id}/posts` | Posts behind the score, filterable by sentiment/platform |
+| `GET /api/socialmeter/{type}/{id}/explain` | The numbers behind the reading: effective posts, 95 % margin, weight by sentiment and substance, top drivers |
+| `GET /api/socialmeter/{type}/{id}/history?days=30` | One reading per day plus the Mann-Kendall trend verdict |
 | `GET /api/socialmeter/snapshots?keys=movie:1,tv:2` | Cached readings for many titles |
 | `POST /api/socialmeter/sync-deletions` | Run the deletion sync now |

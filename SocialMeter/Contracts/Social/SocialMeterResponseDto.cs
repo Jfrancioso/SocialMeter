@@ -59,10 +59,25 @@ public sealed class SocialPostDto
     /// <summary>Hours played at the time of the review; null when unknown.</summary>
     public double? PlaytimeHours { get; init; }
 
-    public static SocialPostDto From(SocialPost p) => new()
+    /// <summary>"bare" (a reaction), "some" (one general reason) or "detailed" (specifics, an argument).</summary>
+    public string SubstanceLevel { get; init; } = "";
+
+    /// <summary>"full" or "reduced": whether the trust policy discounted the author. The amount is never exposed.</summary>
+    public string TrustLevel { get; init; } = "";
+
+    /// <summary>This post's share of the title's total weight, 0–100; null when not computed for this listing.</summary>
+    public double? WeightShare { get; init; }
+
+    public static string SubstanceLevelFor(double substance) => substance >= 0.6 ? "detailed" : substance >= 0.3 ? "some" : "bare";
+    public static string TrustLevelFor(double trust) => trust >= 1 ? "full" : "reduced";
+
+    public static SocialPostDto From(SocialPost p, double? weightShare = null) => new()
     {
         VerdictUp = p.VerdictUp,
         Detailed = p.Substance >= 0.6,
+        SubstanceLevel = SubstanceLevelFor(p.Substance),
+        TrustLevel = TrustLevelFor(p.TrustWeight),
+        WeightShare = weightShare is null ? null : Math.Round(weightShare.Value, 1),
         PlaytimeHours = p.EngagementMinutes is { } m ? Math.Round(m / 60.0, 1) : null,
         Id = p.Id,
         Platform = p.Platform,
@@ -98,5 +113,7 @@ public sealed class SnapshotDto
     public string Label { get; init; } = "";
     public int TotalPosts { get; init; }
     public double Confidence { get; init; }
-    public int? Momentum { get; init; }
+
+    /// <summary>95 % half-width in points.</summary>
+    public int Margin { get; init; }
 }

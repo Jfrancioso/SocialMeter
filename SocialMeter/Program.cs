@@ -69,6 +69,7 @@ builder.Services.AddSingleton<IPostAssessor>(sp =>
     sp.GetRequiredService<IOptions<AnthropicOptions>>().Value.IsConfigured
         ? ActivatorUtilities.CreateInstance<ClaudePostAssessor>(sp)
         : sp.GetRequiredService<LexiconPostAssessorFallback>().Inner);
+builder.Services.AddScoped<ScoreHistoryService>();
 builder.Services.AddScoped<DeletionSyncService>();
 builder.Services.AddHostedService<DeletionSyncWorker>();
 

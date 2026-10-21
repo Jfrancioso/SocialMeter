@@ -18,17 +18,20 @@ public sealed class DeletionSyncService
 
     private readonly SocialMeterDbContext _db;
     private readonly IEnumerable<ISocialSource> _sources;
+    private readonly ScoreHistoryService _history;
     private readonly SocialMeterOptions _options;
     private readonly ILogger<DeletionSyncService> _logger;
 
     public DeletionSyncService(
         SocialMeterDbContext db,
         IEnumerable<ISocialSource> sources,
+        ScoreHistoryService history,
         IOptions<SocialMeterOptions> options,
         ILogger<DeletionSyncService> logger)
     {
         _db = db;
         _sources = sources;
+        _history = history;
         _options = options.Value;
         _logger = logger;
     }
@@ -105,11 +108,14 @@ public sealed class DeletionSyncService
         {
             var posts = await _db.SocialPosts.Where(p => p.TmdbId == tmdbId && p.MediaType == mediaType).ToListAsync(ct);
             TrustPolicy.ApplyCrossPostRules(posts, now);
-            var meter = SocialScoreCalculator.Compute(posts, now, _options.MomentumWindowDays);
+            var meter = SocialScoreCalculator.Compute(posts, now, _options.Scoring);
 
             var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == tmdbId && s.MediaType == mediaType, ct);
             if (snapshot is not null)
+            {
                 snapshot.ApplyMeter(meter, snapshot.LastRefreshedAt);
+                await _history.RecordAsync(mediaType, tmdbId, meter, now, ct);
+            }
         }
         await _db.SaveChangesAsync(ct);
 

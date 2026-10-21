@@ -43,6 +43,19 @@ public sealed class SocialMeterController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    /// <summary>Why the reading is what it is: effective posts, margin, weight by sentiment and substance, the posts that pull hardest.</summary>
+    [HttpGet("{type}/{id:int}/explain")]
+    public async Task<ActionResult<ScoreExplanationDto>> Explain([FromRoute] MediaType type, [FromRoute] int id, CancellationToken ct = default)
+    {
+        var result = await _socialMeter.ExplainAsync(type, id, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>One reading per day plus the Mann-Kendall trend verdict over the configured window.</summary>
+    [HttpGet("{type}/{id:int}/history")]
+    public async Task<ActionResult<ScoreHistoryDto>> History([FromRoute] MediaType type, [FromRoute] int id, [FromQuery] int days = 30, CancellationToken ct = default)
+        => Ok(await _socialMeter.GetHistoryAsync(type, id, days, ct));
+
     [HttpGet("{type}/{id:int}/posts")]
     public async Task<ActionResult<PagedResult<SocialPostDto>>> Posts(
         [FromRoute] MediaType type,

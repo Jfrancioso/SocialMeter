@@ -1,3 +1,5 @@
+using SocialMeter.Application.Social;
+
 namespace SocialMeter.Options;
 
 public sealed class SocialMeterOptions
@@ -16,8 +18,30 @@ public sealed class SocialMeterOptions
     /// <summary>How many posts the score endpoint returns inline.</summary>
     public int TopPosts { get; set; } = 12;
 
-    /// <summary>Posts newer than this count toward momentum.</summary>
-    public int MomentumWindowDays { get; set; } = 14;
+    // ---- Aggregation. Published on the "how it works" page; kept here so they can be tuned against real titles. ----
+
+    /// <summary>
+    /// Strength of the pull toward neutral, in effective posts (the k in the Bayesian average). With this many effective
+    /// posts the data and the prior count equally; a title needs several times this to reach Electric or Cold.
+    /// </summary>
+    public double PriorStrength { get; set; } = 6;
+
+    /// <summary>Floor on the per-post spread used for the margin of error, so unanimous posts never claim zero uncertainty. Sentiment units (−1..1).</summary>
+    public double MinSigma { get; set; } = 0.2;
+
+    /// <summary>Days of daily readings the trend test looks at.</summary>
+    public int TrendWindowDays { get; set; } = 30;
+
+    /// <summary>Significance level for calling a trend "rising" or "falling" (Mann-Kendall p-value).</summary>
+    public double TrendAlpha { get; set; } = 0.05;
+
+    /// <summary>Daily readings needed before the trend test is run at all.</summary>
+    public int MinTrendPoints { get; set; } = 5;
+
+    /// <summary>When a title has no history yet, this many past days are reconstructed from stored post dates.</summary>
+    public int HistoryBackfillDays { get; set; } = 60;
+
+    public ScoringParameters Scoring => new(PriorStrength, MinSigma);
 
     // ---- Tracked set: only these titles get social pulls. ----
 
