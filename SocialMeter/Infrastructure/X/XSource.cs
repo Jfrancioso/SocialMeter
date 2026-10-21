@@ -40,8 +40,13 @@ public sealed class XSource : ISocialSource
         if (!IsConfigured)
             return Array.Empty<SocialPostCandidate>();
 
-        // Replies are almost never reviews ("@grok what movie is this?"), and every post returned costs credits.
-        var query = $"\"{title.Name}\" {title.MediaType.SearchWords()} -is:retweet -is:reply lang:en";
+        // Replies are almost never reviews ("@grok what movie is this?"), promoted posts are ads, and every post returned
+        // costs credits. The excluded phrases are the ones that were pure promo/news in the data; see XOptions.ExcludeTerms.
+        var exclusions = string.Join(' ', _options.ExcludeTerms
+            .Select(t => t.Trim())
+            .Where(t => t.Length > 0)
+            .Select(t => t.Contains(' ') ? $"-\"{t}\"" : $"-{t}"));
+        var query = $"\"{title.Name}\" {title.MediaType.SearchWords()} -is:retweet -is:reply -is:nullcast lang:en {exclusions}".Trim();
         var max = Math.Clamp(_options.MaxResults, 10, 100);
 
         var url = "tweets/search/recent" +

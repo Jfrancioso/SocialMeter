@@ -44,11 +44,16 @@ builder.Services.AddHttpClient<OmdbClient>();
 builder.Services.AddHttpClient<SteamClient>();
 builder.Services.AddHttpClient<RatingLinkResolver>();
 builder.Services.AddHttpClient<RedditSource>();
+builder.Services.AddHttpClient<ArcticShiftSource>();
 builder.Services.AddHttpClient<XSource>();
+builder.Services.Configure<ArcticShiftOptions>(builder.Configuration.GetSection(ArcticShiftOptions.SectionName));
 
 // Social sources are resolved as a set; add a platform by registering another ISocialSource.
 builder.Services.AddHttpClient<SteamReviewSource>();
-builder.Services.AddScoped<ISocialSource>(sp => sp.GetRequiredService<RedditSource>());
+// Reddit: the official API in every environment. In Development only, ArcticShift:Enabled swaps in the archive for
+// local evaluation while the official application is pending; it can never be switched on in production.
+var useArchive = builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("ArcticShift:Enabled");
+builder.Services.AddScoped<ISocialSource>(sp => useArchive ? sp.GetRequiredService<ArcticShiftSource>() : sp.GetRequiredService<RedditSource>());
 builder.Services.AddScoped<ISocialSource>(sp => sp.GetRequiredService<XSource>());
 builder.Services.AddScoped<ISocialSource>(sp => sp.GetRequiredService<SteamReviewSource>());
 

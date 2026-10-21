@@ -108,7 +108,8 @@ public sealed class RedditSource : ISocialSource
         for (var i = 0; i < externalIds.Count; i += UserLookupChunk)
         {
             var chunk = externalIds.Skip(i).Take(UserLookupChunk).ToList();
-            var fullnames = string.Join(',', chunk.Select(id => $"t3_{id}"));
+            // Posts are stored as bare ids (t3_); archive comments carry their t1_ fullname already.
+            var fullnames = string.Join(',', chunk.Select(id => id.StartsWith("t1_") || id.StartsWith("t3_") ? id : $"t3_{id}"));
             var listing = await GetAsync<RedditListing>($"api/info?id={Uri.EscapeDataString(fullnames)}&raw_json=1", ct);
 
             var alive = new HashSet<string>();
@@ -119,11 +120,12 @@ public sealed class RedditSource : ISocialSource
 
                 var gone = d.Author is null or "[deleted]"
                            || d.RemovedByCategory is not null
-                           || d.SelfText is "[removed]" or "[deleted]";
+                           || d.SelfText is "[removed]" or "[deleted]"
+                           || d.Body is "[removed]" or "[deleted]";
                 if (!gone) alive.Add(d.Id);
             }
 
-            foreach (var id in chunk.Where(id => !alive.Contains(id)))
+            foreach (var id in chunk.Where(id => !alive.Contains(id.Contains('_') ? id[(id.IndexOf('_') + 1)..] : id)))
                 removed.Add(id);
         }
 
@@ -222,6 +224,8 @@ public sealed class RedditSource : ISocialSource
         public string? Id { get; set; }
         public string? Title { get; set; }
         [JsonPropertyName("selftext")] public string? SelfText { get; set; }
+        /// <summary>Comment text, for t1_ ids re-checked through /api/info.</summary>
+        public string? Body { get; set; }
         public string? Author { get; set; }
         [JsonPropertyName("author_fullname")] public string? AuthorFullname { get; set; }
         [JsonPropertyName("removed_by_category")] public string? RemovedByCategory { get; set; }
