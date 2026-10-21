@@ -13,6 +13,20 @@ public sealed class SocialMeterOptions
     /// <summary>Posts newer than this count toward momentum.</summary>
     public int MomentumWindowDays { get; set; } = 14;
 
+    // ---- Deletion sync: content removed at the source must not linger here. ----
+
+    /// <summary>How often the background job re-checks stored posts against their platform.</summary>
+    public int DeletionSyncHours { get; set; } = 12;
+
+    /// <summary>A post is re-checked once it has gone this long without confirmation that it still exists.</summary>
+    public int RecheckAfterHours { get; set; } = 24;
+
+    /// <summary>Posts older than this are dropped outright; the score only looks back about a year anyway.</summary>
+    public int RetentionDays { get; set; } = 365;
+
+    /// <summary>Upper bound on posts checked per run, to stay well inside platform rate limits.</summary>
+    public int DeletionSyncBatch { get; set; } = 2000;
+
     // ---- Trust policy. Exact values stay server-side on purpose; the public "how it works" page describes them only in broad strokes. ----
 
     /// <summary>Accounts younger than this are excluded outright — the cheapest spam to create is a fresh account.</summary>

@@ -90,6 +90,34 @@ public sealed class XSource : ISocialSource
         return results;
     }
 
+    /// <summary>
+    /// Re-checks stored posts via the tweet lookup endpoint. Anything X no longer returns — deleted, author suspended,
+    /// or made private — is treated as removed, since we have no right to keep showing it either way.
+    /// </summary>
+    public async Task<IReadOnlySet<string>> FindRemovedAsync(IReadOnlyList<string> externalIds, CancellationToken ct = default)
+    {
+        var removed = new HashSet<string>();
+        if (!IsConfigured || externalIds.Count == 0)
+            return removed;
+
+        const int chunkSize = 100;
+        for (var i = 0; i < externalIds.Count; i += chunkSize)
+        {
+            var chunk = externalIds.Skip(i).Take(chunkSize).ToList();
+            using var res = await _http.GetAsync($"tweets?ids={string.Join(',', chunk)}&tweet.fields=id", ct);
+            if (!res.IsSuccessStatusCode)
+                throw new InvalidOperationException($"X lookup failed ({(int)res.StatusCode} {res.ReasonPhrase}).");
+
+            var payload = await res.Content.ReadFromJsonAsync<XSearchResponse>(cancellationToken: ct);
+            var alive = (payload?.Data ?? new List<XTweet>()).Select(t => t.Id).OfType<string>().ToHashSet();
+
+            foreach (var id in chunk.Where(id => !alive.Contains(id)))
+                removed.Add(id);
+        }
+
+        return removed;
+    }
+
     private sealed class XSearchResponse
     {
         public List<XTweet>? Data { get; set; }

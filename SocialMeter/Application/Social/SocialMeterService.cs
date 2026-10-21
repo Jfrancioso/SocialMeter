@@ -75,20 +75,11 @@ public sealed class SocialMeterService : ISocialMeterService
         if (!fromCache)
         {
             snapshot ??= _db.TitleSnapshots.Add(new TitleSnapshot { TmdbId = tmdbId, MediaType = mediaType }).Entity;
-            snapshot.Score = meter.Score;
-            snapshot.Label = meter.Label;
-            snapshot.Confidence = meter.Confidence;
-            snapshot.TotalPosts = meter.TotalPosts;
-            snapshot.FilteredPosts = meter.FilteredPosts;
-            snapshot.Positive = meter.Breakdown.Positive;
-            snapshot.Neutral = meter.Breakdown.Neutral;
-            snapshot.Negative = meter.Breakdown.Negative;
-            snapshot.Momentum = meter.Momentum;
 
             // When every configured source failed, retry in ten minutes instead of caching the failure for the full window.
             var configured = sourceStatus.Where(s => s.Configured).ToList();
             var allFailed = configured.Count > 0 && configured.All(s => s.Error is not null);
-            snapshot.LastRefreshedAt = allFailed ? now.AddHours(-_options.RefreshAfterHours).AddMinutes(10) : now;
+            snapshot.ApplyMeter(meter, allFailed ? now.AddHours(-_options.RefreshAfterHours).AddMinutes(10) : now);
 
             await _db.SaveChangesAsync(ct);
         }

@@ -79,6 +79,9 @@ namespace SocialMeter.Migrations
                     b.Property<DateTime>("FetchedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("LastCheckedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("MediaType")
                         .IsRequired()
                         .HasMaxLength(10)

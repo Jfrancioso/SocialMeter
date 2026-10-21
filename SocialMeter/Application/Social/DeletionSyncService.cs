@@ -1,0 +1,140 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using SocialMeter.Application.Abstractions;
+using SocialMeter.Domain.Models;
+using SocialMeter.Infrastructure.Data;
+using SocialMeter.Options;
+
+namespace SocialMeter.Application.Social;
+
+/// <summary>
+/// Keeps our copies honest: anything a user deleted or a platform removed is purged here too, old posts are pruned,
+/// and every affected title's score is recomputed. Runs on a timer (<see cref="DeletionSyncWorker"/>) and on demand.
+/// </summary>
+public sealed class DeletionSyncService
+{
+    // Seeded demo posts carry fake ids; the platforms would report them "removed". They are not user content.
+    private const string SeedPrefix = "seed-";
+
+    private readonly SocialMeterDbContext _db;
+    private readonly IEnumerable<ISocialSource> _sources;
+    private readonly SocialMeterOptions _options;
+    private readonly ILogger<DeletionSyncService> _logger;
+
+    public DeletionSyncService(
+        SocialMeterDbContext db,
+        IEnumerable<ISocialSource> sources,
+        IOptions<SocialMeterOptions> options,
+        ILogger<DeletionSyncService> logger)
+    {
+        _db = db;
+        _sources = sources;
+        _options = options.Value;
+        _logger = logger;
+    }
+
+    public async Task<DeletionSyncResult> RunAsync(CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var result = new DeletionSyncResult { StartedAt = now };
+        var affected = new HashSet<(MediaType, int)>();
+
+        // 1. Retention: drop anything older than the window, whatever its state at the source.
+        var cutoff = now.AddDays(-_options.RetentionDays);
+        var expired = await _db.SocialPosts
+            .Where(p => p.CreatedAt < cutoff && !p.ExternalId.StartsWith(SeedPrefix))
+            .ToListAsync(ct);
+        foreach (var p in expired) affected.Add((p.MediaType, p.TmdbId));
+        _db.SocialPosts.RemoveRange(expired);
+        result.Expired = expired.Count;
+
+        // 2. Re-check posts that haven't been confirmed recently, per platform.
+        var recheckBefore = now.AddHours(-_options.RecheckAfterHours);
+        foreach (var source in _sources)
+        {
+            var status = new DeletionSyncSourceResult { Platform = source.Platform, Configured = source.IsConfigured };
+            result.Sources.Add(status);
+            if (!source.IsConfigured) continue;
+
+            var due = await _db.SocialPosts
+                .Where(p => p.Platform == source.Platform
+                            && !p.ExternalId.StartsWith(SeedPrefix)
+                            && (p.LastCheckedAt == null || p.LastCheckedAt < recheckBefore))
+                .OrderBy(p => p.LastCheckedAt ?? DateTime.MinValue)
+                .Take(_options.DeletionSyncBatch)
+                .ToListAsync(ct);
+
+            if (due.Count == 0) continue;
+            status.Checked = due.Count;
+
+            IReadOnlySet<string> removed;
+            try
+            {
+                removed = await source.FindRemovedAsync(due.Select(p => p.ExternalId).ToList(), ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Leave LastCheckedAt untouched so these come up first next run.
+                _logger.LogWarning(ex, "{Platform} deletion check failed; will retry next run", source.Platform);
+                status.Error = ex.Message;
+                continue;
+            }
+
+            foreach (var post in due)
+            {
+                if (removed.Contains(post.ExternalId))
+                {
+                    _db.SocialPosts.Remove(post);
+                    affected.Add((post.MediaType, post.TmdbId));
+                    status.Removed++;
+                }
+                else
+                {
+                    post.LastCheckedAt = now;
+                }
+            }
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        // 3. Recompute every title that lost posts so the meter never reflects content that is gone.
+        foreach (var (mediaType, tmdbId) in affected)
+        {
+            var posts = await _db.SocialPosts.Where(p => p.TmdbId == tmdbId && p.MediaType == mediaType).ToListAsync(ct);
+            TrustPolicy.ApplyCrossPostRules(posts, now);
+            var meter = SocialScoreCalculator.Compute(posts, now, _options.MomentumWindowDays);
+
+            var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == tmdbId && s.MediaType == mediaType, ct);
+            if (snapshot is not null)
+                snapshot.ApplyMeter(meter, snapshot.LastRefreshedAt);
+        }
+        await _db.SaveChangesAsync(ct);
+
+        result.TitlesRecomputed = affected.Count;
+        result.FinishedAt = DateTime.UtcNow;
+
+        _logger.LogInformation(
+            "Deletion sync: {Checked} checked, {Removed} removed, {Expired} expired, {Titles} titles recomputed",
+            result.Sources.Sum(s => s.Checked), result.Sources.Sum(s => s.Removed), result.Expired, result.TitlesRecomputed);
+
+        return result;
+    }
+}
+
+public sealed class DeletionSyncResult
+{
+    public DateTime StartedAt { get; set; }
+    public DateTime FinishedAt { get; set; }
+    public int Expired { get; set; }
+    public int TitlesRecomputed { get; set; }
+    public List<DeletionSyncSourceResult> Sources { get; } = new();
+}
+
+public sealed class DeletionSyncSourceResult
+{
+    public string Platform { get; set; } = "";
+    public bool Configured { get; set; }
+    public int Checked { get; set; }
+    public int Removed { get; set; }
+    public string? Error { get; set; }
+}

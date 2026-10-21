@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Social;
 using SocialMeter.Contracts.Social;
 using SocialMeter.Domain.Models;
 
@@ -10,11 +11,21 @@ namespace SocialMeter.Controllers;
 public sealed class SocialMeterController : ControllerBase
 {
     private readonly ISocialMeterService _socialMeter;
+    private readonly DeletionSyncService _deletionSync;
 
-    public SocialMeterController(ISocialMeterService socialMeter)
+    public SocialMeterController(ISocialMeterService socialMeter, DeletionSyncService deletionSync)
     {
         _socialMeter = socialMeter;
+        _deletionSync = deletionSync;
     }
+
+    /// <summary>
+    /// Runs the deletion sync now: stored posts are re-checked at their platform and any that were deleted or
+    /// removed there are purged, then affected scores are recomputed. The background worker does this on a schedule.
+    /// </summary>
+    [HttpPost("sync-deletions")]
+    public async Task<ActionResult<DeletionSyncResult>> SyncDeletions(CancellationToken ct)
+        => Ok(await _deletionSync.RunAsync(ct));
 
     /// <summary>The SocialMeter reading for a title. Pass ?refresh=true to re-pull from the social sources now.</summary>
     [HttpGet("{type}/{id:int}")]

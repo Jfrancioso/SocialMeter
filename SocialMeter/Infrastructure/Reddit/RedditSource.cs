@@ -95,6 +95,41 @@ public sealed class RedditSource : ISocialSource
         return results;
     }
 
+    /// <summary>
+    /// Re-checks stored posts via /api/info. A post counts as removed when Reddit no longer returns it, the author
+    /// deleted it, or a moderator/admin removed it — in every case the content is gone from Reddit and must go here too.
+    /// </summary>
+    public async Task<IReadOnlySet<string>> FindRemovedAsync(IReadOnlyList<string> externalIds, CancellationToken ct = default)
+    {
+        var removed = new HashSet<string>();
+        if (!IsConfigured || externalIds.Count == 0)
+            return removed;
+
+        for (var i = 0; i < externalIds.Count; i += UserLookupChunk)
+        {
+            var chunk = externalIds.Skip(i).Take(UserLookupChunk).ToList();
+            var fullnames = string.Join(',', chunk.Select(id => $"t3_{id}"));
+            var listing = await GetAsync<RedditListing>($"api/info?id={Uri.EscapeDataString(fullnames)}&raw_json=1", ct);
+
+            var alive = new HashSet<string>();
+            foreach (var child in listing?.Data?.Children ?? new List<RedditChild>())
+            {
+                var d = child.Data;
+                if (d?.Id is null) continue;
+
+                var gone = d.Author is null or "[deleted]"
+                           || d.RemovedByCategory is not null
+                           || d.SelfText is "[removed]" or "[deleted]";
+                if (!gone) alive.Add(d.Id);
+            }
+
+            foreach (var id in chunk.Where(id => !alive.Contains(id)))
+                removed.Add(id);
+        }
+
+        return removed;
+    }
+
     /// <summary>Account age and karma for a batch of t2_ fullnames. Failures degrade to "unknown" rather than failing the fetch.</summary>
     private async Task<Dictionary<string, RedditUser>> LookupAuthorsAsync(List<string> fullnames, CancellationToken ct)
     {
@@ -192,6 +227,7 @@ public sealed class RedditSource : ISocialSource
         [JsonPropertyName("selftext")] public string? SelfText { get; set; }
         public string? Author { get; set; }
         [JsonPropertyName("author_fullname")] public string? AuthorFullname { get; set; }
+        [JsonPropertyName("removed_by_category")] public string? RemovedByCategory { get; set; }
         public int Score { get; set; }
         [JsonPropertyName("num_comments")] public int NumComments { get; set; }
         [JsonPropertyName("created_utc")] public double CreatedUtc { get; set; }

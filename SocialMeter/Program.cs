@@ -49,6 +49,8 @@ builder.Services.AddScoped<IRatingsService, RatingsService>();
 builder.Services.AddScoped<ISocialMeterService, SocialMeterService>();
 builder.Services.AddSingleton<ISentimentAnalyzer, LexiconSentimentAnalyzer>();
 builder.Services.AddSingleton<TrustPolicy>();
+builder.Services.AddScoped<DeletionSyncService>();
+builder.Services.AddHostedService<DeletionSyncWorker>();
 
 builder.Services.AddDbContext<SocialMeterDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));

@@ -40,6 +40,9 @@ public sealed class SocialPost
     public DateTime CreatedAt { get; set; }
     public DateTime FetchedAt { get; set; }
 
+    /// <summary>When the deletion sync last confirmed this post still exists at the source. Null until first checked.</summary>
+    public DateTime? LastCheckedAt { get; set; }
+
     public string? SourceUrl { get; set; }
 
     /// <summary>Subreddit for Reddit posts; null for other platforms.</summary>
