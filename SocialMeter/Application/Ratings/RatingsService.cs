@@ -9,6 +9,7 @@ namespace SocialMeter.Application.Ratings;
 public sealed class RatingsService : IRatingsService
 {
     private static readonly TimeSpan CacheFor = TimeSpan.FromHours(6);
+    private static readonly TimeSpan RetryFailedAfter = TimeSpan.FromMinutes(5);
 
     private readonly OmdbClient _omdb;
     private readonly IMemoryCache _cache;
@@ -41,6 +42,7 @@ public sealed class RatingsService : IRatingsService
         };
 
         OmdbTitle? omdb = null;
+        var omdbFailed = false;
         if (_omdb.IsConfigured && !string.IsNullOrWhiteSpace(title.ImdbId))
         {
             try
@@ -49,7 +51,8 @@ public sealed class RatingsService : IRatingsService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "OMDb lookup failed for {ImdbId}", title.ImdbId);
+                omdbFailed = true;
+                _logger.LogWarning("OMDb lookup failed for {ImdbId}: {Message}", title.ImdbId, ex.Message);
             }
         }
 
@@ -64,7 +67,8 @@ public sealed class RatingsService : IRatingsService
         if (!_omdb.IsConfigured)
             _logger.LogDebug("OMDb not configured; IMDb/RT/Metacritic ratings unavailable.");
 
-        _cache.Set(key, (IReadOnlyList<ExternalRating>)ratings, CacheFor);
+        // A failed lookup (key not yet active, daily quota hit) is retried soon rather than frozen for the full window.
+        _cache.Set(key, (IReadOnlyList<ExternalRating>)ratings, omdbFailed ? RetryFailedAfter : CacheFor);
         return ratings;
     }
 

@@ -27,14 +27,29 @@ public sealed class OmdbClient
             return null;
 
         var url = $"?i={Uri.EscapeDataString(imdbId)}&apikey={Uri.EscapeDataString(_options.ApiKey)}";
-        var dto = await _http.GetFromJsonAsync<OmdbTitle>(url, ct);
-        return dto is { Response: "True" } ? dto : null;
+
+        // OMDb answers key problems with a 401 and a JSON body explaining why ("Invalid API key!" for a key whose
+        // activation link hasn't been clicked, "Request limit reached!" past the daily quota). Read the body either way.
+        using var res = await _http.GetAsync(url, ct);
+        var dto = await res.Content.ReadFromJsonAsync<OmdbTitle>(cancellationToken: ct);
+
+        if (dto is { Response: "True" })
+            return dto;
+
+        if (dto?.Error is not null)
+            throw new InvalidOperationException($"OMDb: {dto.Error}");
+
+        if (!res.IsSuccessStatusCode)
+            throw new InvalidOperationException($"OMDb request failed ({(int)res.StatusCode} {res.ReasonPhrase}).");
+
+        return null;
     }
 }
 
 public sealed class OmdbTitle
 {
     public string? Response { get; set; }
+    public string? Error { get; set; }
     [JsonPropertyName("imdbRating")] public string? ImdbRating { get; set; }
     [JsonPropertyName("imdbVotes")] public string? ImdbVotes { get; set; }
     public string? Metascore { get; set; }
