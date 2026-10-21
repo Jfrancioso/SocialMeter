@@ -10,8 +10,8 @@ using SocialMeter.Options;
 namespace SocialMeter.Infrastructure.X;
 
 /// <summary>
-/// Pulls recent posts from X via the v2 recent-search endpoint, expanding authors so account age and
-/// follower count ride along for the trust policy. Skipped until X:BearerToken is configured.
+/// Pulls recent posts from X via the v2 recent-search endpoint, expanding authors (account age, followers for the
+/// trust policy) and attached media (often where the actual opinion is). Skipped until X:BearerToken is configured.
 /// </summary>
 public sealed class XSource : ISocialSource
 {
@@ -47,8 +47,10 @@ public sealed class XSource : ISocialSource
         var url = "tweets/search/recent" +
                   $"?query={Uri.EscapeDataString(query)}" +
                   $"&max_results={max}" +
-                  "&tweet.fields=created_at,public_metrics,author_id" +
-                  "&expansions=author_id&user.fields=username,created_at,public_metrics";
+                  "&tweet.fields=created_at,public_metrics,author_id,possibly_sensitive,attachments" +
+                  "&expansions=author_id,attachments.media_keys" +
+                  "&user.fields=username,created_at,public_metrics" +
+                  "&media.fields=media_key,type,url,preview_image_url,alt_text";
 
         using var res = await _http.GetAsync(url, ct);
         if (!res.IsSuccessStatusCode)
@@ -62,6 +64,9 @@ public sealed class XSource : ISocialSource
         var users = (payload?.Includes?.Users ?? new List<XUser>())
             .Where(u => u.Id is not null)
             .ToDictionary(u => u.Id!);
+        var media = (payload?.Includes?.Media ?? new List<XMedia>())
+            .Where(m => m.MediaKey is not null)
+            .ToDictionary(m => m.MediaKey!);
 
         var results = new List<SocialPostCandidate>(tweets.Count);
         foreach (var t in tweets)
@@ -71,6 +76,13 @@ public sealed class XSource : ISocialSource
             XUser? user = null;
             if (t.AuthorId is not null) users.TryGetValue(t.AuthorId, out user);
             var username = user?.Username ?? "unknown";
+
+            var attached = (t.Attachments?.MediaKeys ?? new List<string>())
+                .Select(k => media.GetValueOrDefault(k))
+                .OfType<XMedia>()
+                .Select(m => new PostMedia(m.Url ?? m.PreviewImageUrl ?? "", m.Type ?? "photo", m.AltText))
+                .Where(m => m.Url.Length > 0)
+                .ToList();
 
             results.Add(new SocialPostCandidate(
                 Platform,
@@ -85,10 +97,12 @@ public sealed class XSource : ISocialSource
                 null,
                 AuthorId: t.AuthorId,
                 AuthorCreatedAt: user?.CreatedAt?.UtcDateTime,
-                AuthorReputation: user?.PublicMetrics?.FollowersCount));
+                AuthorReputation: user?.PublicMetrics?.FollowersCount,
+                Media: attached.Count > 0 ? attached : null,
+                Sensitive: t.PossiblySensitive));
         }
 
-        _logger.LogInformation("X: {Count} posts for {Title}", results.Count, title.Name);
+        _logger.LogInformation("X: {Count} posts for {Title} ({WithMedia} with media)", results.Count, title.Name, results.Count(r => r.Media is not null));
         return results;
     }
 
@@ -129,6 +143,7 @@ public sealed class XSource : ISocialSource
     private sealed class XIncludes
     {
         public List<XUser>? Users { get; set; }
+        public List<XMedia>? Media { get; set; }
     }
 
     private sealed class XUser
@@ -145,6 +160,15 @@ public sealed class XSource : ISocialSource
         [JsonPropertyName("tweet_count")] public int TweetCount { get; set; }
     }
 
+    private sealed class XMedia
+    {
+        [JsonPropertyName("media_key")] public string? MediaKey { get; set; }
+        public string? Type { get; set; }
+        public string? Url { get; set; }
+        [JsonPropertyName("preview_image_url")] public string? PreviewImageUrl { get; set; }
+        [JsonPropertyName("alt_text")] public string? AltText { get; set; }
+    }
+
     private sealed class XTweet
     {
         public string? Id { get; set; }
@@ -152,6 +176,13 @@ public sealed class XSource : ISocialSource
         [JsonPropertyName("author_id")] public string? AuthorId { get; set; }
         [JsonPropertyName("created_at")] public DateTimeOffset? CreatedAt { get; set; }
         [JsonPropertyName("public_metrics")] public XMetrics? PublicMetrics { get; set; }
+        [JsonPropertyName("possibly_sensitive")] public bool PossiblySensitive { get; set; }
+        public XAttachments? Attachments { get; set; }
+    }
+
+    private sealed class XAttachments
+    {
+        [JsonPropertyName("media_keys")] public List<string>? MediaKeys { get; set; }
     }
 
     private sealed class XMetrics

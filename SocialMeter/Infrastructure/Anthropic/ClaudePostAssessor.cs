@@ -34,9 +34,19 @@ public sealed class ClaudePostAssessor : IPostAssessor
         2. sentiment — a number from -1.0 (hates the title) to 1.0 (loves it), 0 for neutral or purely informational.
            Score ONLY the feeling toward the title itself. "Grok sucks, this is The Haunting of Hill House" says nothing
            about the show: about_title false, sentiment 0. Sarcasm, slang ("mid", "peak", "goated") and backhanded praise
-           count as the feeling they actually convey. When about_title is false, sentiment must be 0.
+           count as the feeling they actually convey. A joke or meme that expresses enjoyment or disappointment with the
+           title is still an opinion about it — crude or exaggerated phrasing doesn't make it off-topic.
+           When about_title is false, sentiment must be 0.
 
-        Keep each note under 12 words. Judge from the text alone; do not guess what links contain.
+        Some posts come with their attached image(s), labelled "[image for id=N]". Read any text in the image
+        (screenshots of other posts, captions, memes) and consider what it shows — the opinion is often there rather
+        than in the post's own words. Do not guess what links contain; a bare URL with no image is just a link.
+
+        3. sensitive_media — true if an attached image should not be shown to a general audience without a tap:
+           nudity or sexually suggestive imagery, graphic gore beyond ordinary film stills, or hateful content.
+           Ordinary posters, screenshots and horror-movie stills are false. Posts without images are false.
+
+        Keep each note under 12 words.
         """;
 
     private static readonly Dictionary<string, JsonElement> Schema = new()
@@ -53,12 +63,13 @@ public sealed class ClaudePostAssessor : IPostAssessor
                 {
                     type = "object",
                     additionalProperties = false,
-                    required = new[] { "id", "about_title", "sentiment", "note" },
+                    required = new[] { "id", "about_title", "sentiment", "sensitive_media", "note" },
                     properties = new
                     {
                         id = new { type = "string" },
                         about_title = new { type = "boolean" },
                         sentiment = new { type = "number" },
+                        sensitive_media = new { type = "boolean" },
                         note = new { type = "string" }
                     }
                 }
@@ -114,7 +125,7 @@ public sealed class ClaudePostAssessor : IPostAssessor
             Model = _options.Model,
             MaxTokens = 4096,
             System = SystemPrompt,
-            Messages = [new UserMessageParam(BuildRequest(title, batch))],
+            Messages = [new UserMessageParam(BuildContent(title, batch))],
             OutputConfig = new OutputConfig
             {
                 Effort = Effort.Low,
@@ -137,12 +148,31 @@ public sealed class ClaudePostAssessor : IPostAssessor
                 throw new InvalidOperationException($"Assessment for post {i} missing from the response.");
 
             var sentiment = a.AboutTitle ? Math.Clamp(a.Sentiment, -1, 1) : 0;
-            results.Add(new PostAssessment(a.AboutTitle, sentiment, a.Note));
+            results.Add(new PostAssessment(a.AboutTitle, sentiment, a.Note, a.SensitiveMedia));
         }
 
         _logger.LogInformation("Claude assessed {Count} posts about {Title}: {OffTopic} off-topic ({In}+{Out} tokens)",
             batch.Count, title.Name, results.Count(r => !r.AboutTitle), response.Usage.InputTokens, response.Usage.OutputTokens);
         return results;
+    }
+
+    /// <summary>The request text followed by each post's first image (within the per-batch cap), labelled by post id.</summary>
+    private List<ContentBlockParam> BuildContent(Title title, IReadOnlyList<SocialPostCandidate> batch)
+    {
+        var blocks = new List<ContentBlockParam> { new TextBlockParam { Text = BuildRequest(title, batch) } };
+        if (!_options.IncludeImages) return blocks;
+
+        var budget = Math.Max(0, _options.MaxImagesPerBatch);
+        for (var i = 0; i < batch.Count && budget > 0; i++)
+        {
+            var image = batch[i].Media?.FirstOrDefault(m => m.Url.Length > 0);
+            if (image is null) continue;
+
+            blocks.Add(new TextBlockParam { Text = $"[image for id={i}]" });
+            blocks.Add(new ImageBlockParam { Source = new UrlImageSource { Url = image.Url } });
+            budget--;
+        }
+        return blocks;
     }
 
     private string BuildRequest(Title title, IReadOnlyList<SocialPostCandidate> batch)
@@ -164,6 +194,7 @@ public sealed class ClaudePostAssessor : IPostAssessor
             sb.Append("[id=").Append(i).Append("] ")
               .Append(p.Platform == "x" ? "X @" : "Reddit u/").Append(p.Author);
             if (p.Community is not null) sb.Append(" in r/").Append(p.Community);
+            if (p.Media is { Count: > 0 }) sb.Append(" (").Append(p.Media.Count).Append(p.Media.Count == 1 ? " image attached" : " images attached").Append(')');
             sb.AppendLine(":");
             sb.AppendLine(Truncate(p.Content, _options.MaxPostChars)).AppendLine();
         }
@@ -182,6 +213,7 @@ public sealed class ClaudePostAssessor : IPostAssessor
         [JsonPropertyName("id")] public string Id { get; set; } = "";
         [JsonPropertyName("about_title")] public bool AboutTitle { get; set; }
         [JsonPropertyName("sentiment")] public double Sentiment { get; set; }
+        [JsonPropertyName("sensitive_media")] public bool SensitiveMedia { get; set; }
         [JsonPropertyName("note")] public string? Note { get; set; }
     }
 }

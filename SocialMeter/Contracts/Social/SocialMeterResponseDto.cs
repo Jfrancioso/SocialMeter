@@ -45,12 +45,19 @@ public sealed class SocialPostDto
     /// <summary>True when the author is an established account counting at full weight. The weight itself is never exposed.</summary>
     public bool Established { get; init; }
 
+    public IReadOnlyList<PostMedia> Media { get; init; } = Array.Empty<PostMedia>();
+
+    /// <summary>The platform flagged the post as possibly sensitive; show media only on request.</summary>
+    public bool Sensitive { get; init; }
+
     public static SocialPostDto From(SocialPost p) => new()
     {
         Id = p.Id,
         Platform = p.Platform,
         Author = p.Author,
         Content = p.Content,
+        Media = p.MediaJson is null ? Array.Empty<PostMedia>() : System.Text.Json.JsonSerializer.Deserialize<List<PostMedia>>(p.MediaJson) ?? new List<PostMedia>(),
+        Sensitive = p.Sensitive,
         Sentiment = p.Sentiment,
         SentimentScore = Math.Round(p.SentimentScore, 2),
         Established = p.TrustWeight >= 1,

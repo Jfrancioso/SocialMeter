@@ -206,6 +206,8 @@ public sealed class SocialMeterService : ISocialMeterService
         post.Analyzer = _assessor.Name;
         post.AnalyzerNote = assessment.Note is null ? null : Trim(assessment.Note, 120);
         post.TrustWeight = trust.Weight;
+        // The platform's flag or our own read of the image — either hides media behind a tap.
+        post.Sensitive = post.Sensitive || assessment.SensitiveMedia;
 
         if (trust.Excluded)
         {
@@ -226,7 +228,16 @@ public sealed class SocialMeterService : ISocialMeterService
 
     private static SocialPostCandidate ToCandidate(SocialPost p) => new(
         p.Platform, p.ExternalId, p.Author, p.Content, p.Upvotes, p.Comments, p.CreatedAt, p.SourceUrl, p.Community,
-        p.AuthorId, p.AuthorCreatedAt, p.AuthorReputation);
+        p.AuthorId, p.AuthorCreatedAt, p.AuthorReputation,
+        p.MediaJson is null ? null : System.Text.Json.JsonSerializer.Deserialize<List<PostMedia>>(p.MediaJson),
+        p.Sensitive);
+
+    private static string? SerializeMedia(IReadOnlyList<PostMedia>? media)
+    {
+        if (media is null || media.Count == 0) return null;
+        var json = System.Text.Json.JsonSerializer.Serialize(media.Take(4));
+        return json.Length <= 2000 ? json : System.Text.Json.JsonSerializer.Serialize(media.Take(1));
+    }
 
     private async Task<SourceStatusDto> IngestAsync(ISocialSource source, Title title, DateTime now, CancellationToken ct)
     {
@@ -259,11 +270,15 @@ public sealed class SocialMeterService : ISocialMeterService
             if (existing.TryGetValue(c.ExternalId, out var post))
             {
                 // Engagement, account standing and (edited) text keep moving after a post is first seen; keep them current.
-                var edited = post.Content != c.Content;
+                // Media arriving for a post we only had text for counts as new information worth re-reading.
+                var mediaJson = SerializeMedia(c.Media);
+                var edited = post.Content != c.Content || (post.MediaJson is null && mediaJson is not null);
                 post.Upvotes = c.Upvotes;
                 post.Comments = c.Comments;
                 post.Content = c.Content;
                 post.ContentHash = TrustPolicy.ContentHash(c.Content);
+                post.MediaJson = mediaJson ?? post.MediaJson;
+                post.Sensitive = c.Sensitive;
                 post.AuthorId ??= c.AuthorId;
                 post.AuthorCreatedAt ??= c.AuthorCreatedAt;
                 post.AuthorReputation = c.AuthorReputation ?? post.AuthorReputation;
@@ -293,6 +308,8 @@ public sealed class SocialMeterService : ISocialMeterService
                 AuthorReputation = c.AuthorReputation,
                 Content = c.Content,
                 ContentHash = TrustPolicy.ContentHash(c.Content),
+                MediaJson = SerializeMedia(c.Media),
+                Sensitive = c.Sensitive,
                 Upvotes = c.Upvotes,
                 Comments = c.Comments,
                 CreatedAt = c.CreatedAt,

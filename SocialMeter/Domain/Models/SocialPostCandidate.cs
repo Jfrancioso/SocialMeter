@@ -16,5 +16,9 @@ public sealed record SocialPostCandidate(
     /// <summary>When the author's account was created. Null when the source could not tell us.</summary>
     DateTime? AuthorCreatedAt = null,
     /// <summary>Reddit karma or X follower count — a rough "has this account participated" signal.</summary>
-    int? AuthorReputation = null
+    int? AuthorReputation = null,
+    /// <summary>Attached images (or video preview frames). Often where the actual opinion lives.</summary>
+    IReadOnlyList<PostMedia>? Media = null,
+    /// <summary>The platform flagged the post as possibly sensitive; its media is hidden by default.</summary>
+    bool Sensitive = false
 );

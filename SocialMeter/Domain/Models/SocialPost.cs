@@ -21,6 +21,12 @@ public sealed class SocialPost
 
     public string Content { get; set; } = "";
 
+    /// <summary>Attached media as a JSON array of <see cref="PostMedia"/>; null when the post has none.</summary>
+    public string? MediaJson { get; set; }
+
+    /// <summary>The platform flagged the post as possibly sensitive; the UI hides its media behind a tap.</summary>
+    public bool Sensitive { get; set; }
+
     /// <summary>Hash of the normalized content, used to catch copy-paste campaigns.</summary>
     public string ContentHash { get; set; } = "";
 

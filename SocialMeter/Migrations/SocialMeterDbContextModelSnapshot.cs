@@ -91,6 +91,10 @@ namespace SocialMeter.Migrations
                     b.Property<DateTime?>("LastCheckedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("MediaJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<string>("MediaType")
                         .IsRequired()
                         .HasMaxLength(10)
@@ -100,6 +104,9 @@ namespace SocialMeter.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("Sensitive")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Sentiment")
                         .IsRequired()
@@ -155,6 +162,7 @@ namespace SocialMeter.Migrations
                             FetchedAt = new DateTime(2024, 3, 18, 0, 0, 0, 0, DateTimeKind.Utc),
                             MediaType = "Movie",
                             Platform = "reddit",
+                            Sensitive = false,
                             Sentiment = "Positive",
                             SentimentScore = 0.84999999999999998,
                             SourceUrl = "https://www.reddit.com/r/movies/",
@@ -180,6 +188,7 @@ namespace SocialMeter.Migrations
                             FetchedAt = new DateTime(2024, 3, 18, 0, 0, 0, 0, DateTimeKind.Utc),
                             MediaType = "Movie",
                             Platform = "reddit",
+                            Sensitive = false,
                             Sentiment = "Negative",
                             SentimentScore = -0.69999999999999996,
                             SourceUrl = "https://www.reddit.com/r/TrueFilm/",
@@ -205,6 +214,7 @@ namespace SocialMeter.Migrations
                             FetchedAt = new DateTime(2024, 3, 18, 0, 0, 0, 0, DateTimeKind.Utc),
                             MediaType = "Movie",
                             Platform = "reddit",
+                            Sensitive = false,
                             Sentiment = "Positive",
                             SentimentScore = 0.69999999999999996,
                             SourceUrl = "https://www.reddit.com/r/movies/",
@@ -230,6 +240,7 @@ namespace SocialMeter.Migrations
                             FetchedAt = new DateTime(2024, 3, 18, 0, 0, 0, 0, DateTimeKind.Utc),
                             MediaType = "Movie",
                             Platform = "reddit",
+                            Sensitive = false,
                             Sentiment = "Neutral",
                             SentimentScore = 0.050000000000000003,
                             SourceUrl = "https://www.reddit.com/r/moviesuggestions/",
@@ -255,6 +266,7 @@ namespace SocialMeter.Migrations
                             FetchedAt = new DateTime(2024, 3, 18, 0, 0, 0, 0, DateTimeKind.Utc),
                             MediaType = "Movie",
                             Platform = "reddit",
+                            Sensitive = false,
                             Sentiment = "Positive",
                             SentimentScore = 0.90000000000000002,
                             SourceUrl = "https://www.reddit.com/r/dune/",
@@ -280,6 +292,7 @@ namespace SocialMeter.Migrations
                             FetchedAt = new DateTime(2024, 3, 18, 0, 0, 0, 0, DateTimeKind.Utc),
                             MediaType = "Movie",
                             Platform = "reddit",
+                            Sensitive = false,
                             Sentiment = "Negative",
                             SentimentScore = -0.59999999999999998,
                             SourceUrl = "https://www.reddit.com/r/books/",
@@ -305,6 +318,7 @@ namespace SocialMeter.Migrations
                             FetchedAt = new DateTime(2024, 3, 18, 0, 0, 0, 0, DateTimeKind.Utc),
                             MediaType = "Movie",
                             Platform = "reddit",
+                            Sensitive = false,
                             Sentiment = "Positive",
                             SentimentScore = 0.59999999999999998,
                             SourceUrl = "https://www.reddit.com/r/movies/",
@@ -330,6 +344,7 @@ namespace SocialMeter.Migrations
                             FetchedAt = new DateTime(2024, 3, 18, 0, 0, 0, 0, DateTimeKind.Utc),
                             MediaType = "Movie",
                             Platform = "reddit",
+                            Sensitive = false,
                             Sentiment = "Positive",
                             SentimentScore = 0.45000000000000001,
                             SourceUrl = "https://www.reddit.com/r/cinematography/",
@@ -355,6 +370,7 @@ namespace SocialMeter.Migrations
                             FetchedAt = new DateTime(2024, 3, 18, 0, 0, 0, 0, DateTimeKind.Utc),
                             MediaType = "Movie",
                             Platform = "reddit",
+                            Sensitive = false,
                             Sentiment = "Negative",
                             SentimentScore = -0.69999999999999996,
                             SourceUrl = "https://www.reddit.com/r/movies/",
@@ -380,6 +396,7 @@ namespace SocialMeter.Migrations
                             FetchedAt = new DateTime(2024, 3, 18, 0, 0, 0, 0, DateTimeKind.Utc),
                             MediaType = "Movie",
                             Platform = "reddit",
+                            Sensitive = false,
                             Sentiment = "Positive",
                             SentimentScore = 0.75,
                             SourceUrl = "https://www.reddit.com/r/movies/",

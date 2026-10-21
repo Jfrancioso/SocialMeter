@@ -29,6 +29,7 @@ public class SocialMeterDbContext : DbContext
             entity.Property(e => e.Author).IsRequired().HasMaxLength(100);
             entity.Property(e => e.AuthorId).HasMaxLength(64);
             entity.Property(e => e.Content).IsRequired();
+            entity.Property(e => e.MediaJson).HasMaxLength(2000);
             entity.Property(e => e.ContentHash).IsRequired().HasMaxLength(32);
             entity.Property(e => e.Sentiment).HasConversion<string>().HasMaxLength(10).IsRequired();
             entity.Property(e => e.Analyzer).IsRequired().HasMaxLength(20);

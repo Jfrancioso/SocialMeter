@@ -18,7 +18,8 @@ public interface IPostAssessor
 /// <param name="AboutTitle">False when the post only mentions the title in passing, is about a different work, or is news/promo rather than a reaction.</param>
 /// <param name="Sentiment">-1..1 toward the title itself, ignoring feelings about anything else in the post.</param>
 /// <param name="Note">Short reason, kept for auditing; never shown to readers.</param>
-public readonly record struct PostAssessment(bool AboutTitle, double Sentiment, string? Note)
+/// <param name="SensitiveMedia">The assessor judged an attached image unsuitable to show by default (nudity, gore, suggestive content).</param>
+public readonly record struct PostAssessment(bool AboutTitle, double Sentiment, string? Note, bool SensitiveMedia = false)
 {
     public SentimentResult ToResult() => SentimentResult.FromScore(Sentiment);
 }
