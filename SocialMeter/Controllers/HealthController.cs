@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 
-namespace SocialMeter.Api.Controllers;
+namespace SocialMeter.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]

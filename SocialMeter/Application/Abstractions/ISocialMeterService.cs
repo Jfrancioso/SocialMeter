@@ -1,0 +1,15 @@
+using SocialMeter.Contracts.Social;
+using SocialMeter.Domain.Models;
+
+namespace SocialMeter.Application.Abstractions;
+
+public interface ISocialMeterService
+{
+    /// <summary>Returns the title's SocialMeter reading, refreshing from the social sources when the cached one is stale.</summary>
+    Task<SocialMeterResponseDto?> GetScoreAsync(MediaType mediaType, int tmdbId, bool forceRefresh, CancellationToken ct = default);
+
+    Task<PagedResult<SocialPostDto>> GetPostsAsync(MediaType mediaType, int tmdbId, Sentiment? sentiment, string? platform, int page, int pageSize, CancellationToken ct = default);
+
+    /// <summary>Cached readings only; never triggers a fetch. Keys look like "movie:693134".</summary>
+    Task<IReadOnlyDictionary<string, SnapshotDto>> GetSnapshotsAsync(IEnumerable<(MediaType MediaType, int TmdbId)> keys, CancellationToken ct = default);
+}

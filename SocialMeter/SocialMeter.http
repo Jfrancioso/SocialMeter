@@ -1,4 +1,29 @@
-@SocialMeter_HostAddress = http://localhost:5099
+@baseUrl = https://localhost:7101
+
+### Health
 GET {{baseUrl}}/api/health
 Accept: application/json
-###
+
+### Home page rows
+GET {{baseUrl}}/api/home?region=US
+
+### Search movies and shows together
+GET {{baseUrl}}/api/titles/search?query=dune
+
+### Title details
+GET {{baseUrl}}/api/titles/movie/693134
+
+### Other sites' ratings
+GET {{baseUrl}}/api/titles/movie/693134/ratings
+
+### SocialMeter reading (seeded posts work without any social credentials)
+GET {{baseUrl}}/api/socialmeter/movie/693134
+
+### Force a re-pull from Reddit / X
+GET {{baseUrl}}/api/socialmeter/movie/693134?refresh=true
+
+### Posts behind the score
+GET {{baseUrl}}/api/socialmeter/movie/693134/posts?sentiment=negative&page=1&pageSize=20
+
+### Cached readings for a batch of titles
+GET {{baseUrl}}/api/socialmeter/snapshots?keys=movie:693134,movie:558449

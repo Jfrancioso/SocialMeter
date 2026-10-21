@@ -1,14 +1,21 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
-using SocialMeter.Application.Movies;
-using SocialMeter.Infrastructure.Tmdb;
-using SocialMeter.Options;
-using SocialMeter.Services;
+using SocialMeter.Application.Ratings;
+using SocialMeter.Application.Social;
+using SocialMeter.Application.Titles;
 using SocialMeter.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
+using SocialMeter.Infrastructure.Omdb;
+using SocialMeter.Infrastructure.Reddit;
+using SocialMeter.Infrastructure.Tmdb;
+using SocialMeter.Infrastructure.X;
+using SocialMeter.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ---- Options ----
 builder.Services
     .AddOptions<TmdbOptions>()
     .Bind(builder.Configuration.GetSection(TmdbOptions.SectionName))
@@ -16,26 +23,48 @@ builder.Services
     .Validate(o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _), "Tmdb:BaseUrl must be a valid absolute URL.")
     .ValidateOnStart();
 
-builder.Services.AddScoped<IMovieService, MovieService>();
+builder.Services.Configure<RedditOptions>(builder.Configuration.GetSection(RedditOptions.SectionName));
+builder.Services.Configure<XOptions>(builder.Configuration.GetSection(XOptions.SectionName));
+builder.Services.Configure<OmdbOptions>(builder.Configuration.GetSection(OmdbOptions.SectionName));
+builder.Services.Configure<SocialMeterOptions>(builder.Configuration.GetSection(SocialMeterOptions.SectionName));
 
+// ---- External clients ----
 builder.Services.AddHttpClient<TmdbClient>((sp, http) =>
 {
     var opts = sp.GetRequiredService<IOptions<TmdbOptions>>().Value;
-
-    // Ensure it ends with a trailing slash so relative URLs combine correctly.
-    var baseUrl = opts.BaseUrl.EndsWith("/") ? opts.BaseUrl : opts.BaseUrl + "/";
-    http.BaseAddress = new Uri(baseUrl);
+    http.BaseAddress = new Uri(opts.BaseUrl.EndsWith('/') ? opts.BaseUrl : opts.BaseUrl + "/");
 });
+builder.Services.AddHttpClient<OmdbClient>();
+builder.Services.AddHttpClient<RedditSource>();
+builder.Services.AddHttpClient<XSource>();
 
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-builder.Services.AddProblemDetails();
-builder.Services.AddHttpClient<PracticeHttpService>();
+// Social sources are resolved as a set; add a platform by registering another ISocialSource.
+builder.Services.AddScoped<ISocialSource>(sp => sp.GetRequiredService<RedditSource>());
+builder.Services.AddScoped<ISocialSource>(sp => sp.GetRequiredService<XSource>());
+
+// ---- Application services ----
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<ITitleService, TitleService>();
+builder.Services.AddScoped<IRatingsService, RatingsService>();
+builder.Services.AddScoped<ISocialMeterService, SocialMeterService>();
+builder.Services.AddSingleton<ISentimentAnalyzer, LexiconSentimentAnalyzer>();
+builder.Services.AddSingleton<TrustPolicy>();
+
 builder.Services.AddDbContext<SocialMeterDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// ADD THIS - CORS Configuration
+// ---- Web ----
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(o =>
+    {
+        // Enums go over the wire as "movie" / "tv" / "positive" rather than numbers.
+        o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+    });
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+builder.Services.AddProblemDetails();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowVueFrontend", policy =>
@@ -49,6 +78,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Apply pending migrations so a fresh clone gets its tables and seed posts on first run.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<SocialMeterDbContext>();
+    db.Database.Migrate();
+}
+
 app.UseCors("AllowVueFrontend");
 
 if (app.Environment.IsDevelopment())
@@ -56,6 +92,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
 app.UseExceptionHandler();
 app.UseHttpsRedirection();
 app.UseAuthorization();

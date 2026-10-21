@@ -1,6 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Contracts.Home;
+using SocialMeter.Domain.Models;
 
 namespace SocialMeter.Controllers;
 
@@ -8,46 +10,49 @@ namespace SocialMeter.Controllers;
 [Route("api/home")]
 public sealed class HomeController : ControllerBase
 {
-    private readonly IMovieService _movies;
+    private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(5);
 
-    public HomeController(IMovieService movies)
+    private readonly ITitleService _titles;
+    private readonly IMemoryCache _cache;
+
+    public HomeController(ITitleService titles, IMemoryCache cache)
     {
-        _movies = movies;
+        _titles = titles;
+        _cache = cache;
     }
 
     [HttpGet]
-    public async Task<IActionResult> Get([FromQuery] string region = "US", [FromQuery] int page = 1, CancellationToken ct = default)
+    public async Task<ActionResult<HomeResponseDto>> Get([FromQuery] string region = "US", CancellationToken ct = default)
     {
-        // In the future, you can do these in parallel with Task.WhenAll
-        var trending = await _movies.GetTrendingAsync(region, page, ct);
-        var nowPlaying = await _movies.GetNowPlayingAsync(region, page, ct);
+        var key = $"home:{region.ToUpperInvariant()}";
+        if (_cache.TryGetValue(key, out HomeResponseDto? cached) && cached is not null)
+            return Ok(cached);
+
+        var trendingTask = _titles.GetTrendingAsync(null, 1, ct);
+        var nowPlayingTask = _titles.GetNowPlayingAsync(region, 1, ct);
+        var onTheAirTask = _titles.GetOnTheAirAsync(1, ct);
+        var popularMoviesTask = _titles.GetPopularAsync(MediaType.Movie, 1, ct);
+        var popularTvTask = _titles.GetPopularAsync(MediaType.Tv, 1, ct);
+
+        await Task.WhenAll(trendingTask, nowPlayingTask, onTheAirTask, popularMoviesTask, popularTvTask);
+
+        var trending = trendingTask.Result;
+        var featured = trending.Items.FirstOrDefault(t => t.BackdropPath.Length > 0) ?? trending.Items.FirstOrDefault();
 
         var response = new HomeResponseDto
         {
-            Featured = trending.Items.FirstOrDefault(),
+            Featured = featured,
             Rows =
             [
-                new HomeRowDto
-        {
-            Key = "trending",
-            Title = "Trending",
-            Items = trending.Items,
-            Page = trending.Page,
-            TotalPages = trending.TotalPages,
-            TotalResults = trending.TotalResults
-        },
-        new HomeRowDto
-        {
-            Key = "now_playing",
-            Title = "Now Playing",
-            Items = nowPlaying.Items,
-            Page = nowPlaying.Page,
-            TotalPages = nowPlaying.TotalPages,
-            TotalResults = nowPlaying.TotalResults
-        }
+                new HomeRowDto { Key = "trending", Title = "Trending now", Subtitle = "What the internet is talking about today", Items = trending.Items },
+                new HomeRowDto { Key = "now_playing", Title = "In theaters", Subtitle = "Playing near you", Items = nowPlayingTask.Result.Items },
+                new HomeRowDto { Key = "on_the_air", Title = "On TV this week", Subtitle = "Shows with new episodes airing", Items = onTheAirTask.Result.Items },
+                new HomeRowDto { Key = "popular_movies", Title = "Popular movies", Items = popularMoviesTask.Result.Items },
+                new HomeRowDto { Key = "popular_tv", Title = "Popular shows", Items = popularTvTask.Result.Items }
             ]
         };
 
+        _cache.Set(key, response, CacheFor);
         return Ok(response);
     }
 }

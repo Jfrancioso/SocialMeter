@@ -1,7 +1,6 @@
 ﻿using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Options;
-using SocialMeter.Common.Parsing;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Tmdb.Dtos;
 using SocialMeter.Infrastructure.Tmdb.Mapping;
@@ -20,160 +19,115 @@ public sealed class TmdbClient
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
-    public async Task<PagedResult<Movie>> GetNowPlayingAsync(string region = "US", int page = 1, CancellationToken ct = default)
+    public Task<PagedResult<Title>> GetTrendingAsync(MediaType? mediaType, int page, CancellationToken ct)
     {
-        EnsureConfigured();
-
-        page = ClampPage(page);
-        region = NormalizeRegion(region);
-
-        var url =
-            $"movie/now_playing" +
-            $"?api_key={Uri.EscapeDataString(_options.ApiKey)}" +
-            $"&region={Uri.EscapeDataString(region)}" +
-            $"&page={page}";
-
-        var dto = await _http.GetFromJsonAsync<TmdbPagedResponse<TmdbMovieItem>>(url, ct);
-
-        // dto can be null if deserialization fails or body is empty
-        if (dto is null)
+        var segment = mediaType switch
         {
-            return new PagedResult<Movie>(Array.Empty<Movie>(), page, 0, 0);
-        }
-
-        var items = dto.Results.Select(TmdbMovieMapper.ToNowPlaying).ToList();
-
-        return new PagedResult<Movie>(
-            items,
-            dto.Page == 0 ? page : dto.Page,
-            dto.TotalPages,
-            dto.TotalResults
-        );
+            MediaType.Movie => "movie",
+            MediaType.Tv => "tv",
+            _ => "all"
+        };
+        return mediaType is null
+            ? GetMixedListAsync($"trending/all/day", page, ct)
+            : GetListAsync($"trending/{segment}/day", mediaType.Value, page, ct);
     }
 
-    public async Task<PagedResult<Movie>> GetTrendingAsync(int page = 1, CancellationToken ct = default)
+    public Task<PagedResult<Title>> GetNowPlayingAsync(string region, int page, CancellationToken ct)
+        => GetListAsync($"movie/now_playing?region={Uri.EscapeDataString(NormalizeRegion(region))}", MediaType.Movie, page, ct);
+
+    public Task<PagedResult<Title>> GetOnTheAirAsync(int page, CancellationToken ct)
+        => GetListAsync("tv/on_the_air", MediaType.Tv, page, ct);
+
+    public Task<PagedResult<Title>> GetPopularAsync(MediaType mediaType, int page, CancellationToken ct)
+        => GetListAsync($"{Segment(mediaType)}/popular", mediaType, page, ct);
+
+    public Task<PagedResult<Title>> GetTopRatedAsync(MediaType mediaType, int page, CancellationToken ct)
+        => GetListAsync($"{Segment(mediaType)}/top_rated", mediaType, page, ct);
+
+    public Task<PagedResult<Title>> SearchAsync(string query, MediaType? mediaType, int page, CancellationToken ct)
     {
-        EnsureConfigured();
+        if (string.IsNullOrWhiteSpace(query))
+            return Task.FromResult(Empty(page));
 
-        page = ClampPage(page);
-
-        var url =
-            $"trending/movie/day" +
-            $"?api_key={Uri.EscapeDataString(_options.ApiKey)}" +
-            $"&page={page}";
-
-        var dto = await _http.GetFromJsonAsync<TmdbPagedResponse<TmdbMovieItem>>(url, ct);
-
-        if (dto is null)
-        {
-            return new PagedResult<Movie>(Array.Empty<Movie>(), page, 0, 0);
-        }
-
-        var items = dto.Results.Select(TmdbMovieMapper.ToTrending).ToList();
-
-        return new PagedResult<Movie>(
-            items,
-            dto.Page == 0 ? page : dto.Page,
-            dto.TotalPages,
-            dto.TotalResults
-        );
+        var q = $"query={Uri.EscapeDataString(query.Trim())}&include_adult=false";
+        return mediaType is null
+            ? GetMixedListAsync($"search/multi?{q}", page, ct)
+            : GetListAsync($"search/{Segment(mediaType.Value)}?{q}", mediaType.Value, page, ct);
     }
 
-    public async Task<Movie?> GetByIdAsync(int id, CancellationToken ct = default)
+    public async Task<Title?> GetDetailsAsync(MediaType mediaType, int id, CancellationToken ct)
     {
         EnsureConfigured();
-
         if (id <= 0) throw new ArgumentOutOfRangeException(nameof(id), "id must be > 0");
 
-        var url = $"movie/{id}?api_key={Uri.EscapeDataString(_options.ApiKey)}";
+        var url = WithKey($"{Segment(mediaType)}/{id}?append_to_response=external_ids");
 
         using var res = await _http.GetAsync(url, ct);
-
         if (res.StatusCode == HttpStatusCode.NotFound)
             return null;
 
         if (!res.IsSuccessStatusCode)
         {
-            // read body so you can see TMDB message in logs/debug
             var body = await res.Content.ReadAsStringAsync(ct);
-            throw new InvalidOperationException($"TMDB GetById failed ({(int)res.StatusCode}): {body}");
+            throw new InvalidOperationException($"TMDB details failed ({(int)res.StatusCode}): {body}");
         }
 
-        var dto = await res.Content.ReadFromJsonAsync<TmdbMovieItem>(cancellationToken: ct);
-
-        if (dto is null) return null;
-
-        return new Movie
-        {
-            TmdbId = dto.Id,
-            Title = dto.Title ?? "",
-            PosterPath = dto.PosterPath ?? "",
-            BackdropPath = dto.BackdropPath ?? "",
-            Overview = dto.Overview ?? "",
-            ReleaseDate = SocialMeter.Common.Parsing.DateParser.TryParseDateOnly(dto.ReleaseDate),
-            VoteAverage = dto.VoteAverage,
-            MediaType = MediaType.Movie
-        };
+        var dto = await res.Content.ReadFromJsonAsync<TmdbTitleItem>(cancellationToken: ct);
+        return dto is null ? null : TmdbMapper.ToTitle(dto, mediaType);
     }
 
-    public async Task<PagedResult<Movie>> SearchMoviesAsync(string query, int page = 1, CancellationToken ct = default)
+    private async Task<PagedResult<Title>> GetListAsync(string pathAndQuery, MediaType mediaType, int page, CancellationToken ct)
     {
         EnsureConfigured();
-
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            return new PagedResult<Movie>(Array.Empty<Movie>(), page, 0, 0);
-        }
-
         page = ClampPage(page);
 
-        var url =
-            $"search/movie" +
-            $"?api_key={Uri.EscapeDataString(_options.ApiKey)}" +
-            $"&query={Uri.EscapeDataString(query)}" +
-            $"&page={page}";
+        var dto = await _http.GetFromJsonAsync<TmdbPagedResponse<TmdbTitleItem>>(WithKey(pathAndQuery, page), ct);
+        if (dto is null) return Empty(page);
 
-        var dto = await _http.GetFromJsonAsync<TmdbPagedResponse<TmdbMovieItem>>(url, ct);
-
-        if (dto is null)
-        {
-            return new PagedResult<Movie>(Array.Empty<Movie>(), page, 0, 0);
-        }
-
-        var items = dto.Results.Select(TmdbMovieMapper.ToSearchResult).ToList();
-
-        return new PagedResult<Movie>(
-            items,
-            dto.Page == 0 ? page : dto.Page,
-            dto.TotalPages,
-            dto.TotalResults
-        );
+        var items = dto.Results.Select(r => TmdbMapper.ToTitle(r, mediaType)).ToList();
+        return new PagedResult<Title>(items, dto.Page == 0 ? page : dto.Page, dto.TotalPages, dto.TotalResults);
     }
+
+    private async Task<PagedResult<Title>> GetMixedListAsync(string pathAndQuery, int page, CancellationToken ct)
+    {
+        EnsureConfigured();
+        page = ClampPage(page);
+
+        var dto = await _http.GetFromJsonAsync<TmdbPagedResponse<TmdbTitleItem>>(WithKey(pathAndQuery, page), ct);
+        if (dto is null) return Empty(page);
+
+        var items = dto.Results.Select(TmdbMapper.ToTitleFromMixed).OfType<Title>().ToList();
+        return new PagedResult<Title>(items, dto.Page == 0 ? page : dto.Page, dto.TotalPages, dto.TotalResults);
+    }
+
+    private string WithKey(string pathAndQuery, int? page = null)
+    {
+        var sep = pathAndQuery.Contains('?') ? "&" : "?";
+        var url = $"{pathAndQuery}{sep}api_key={Uri.EscapeDataString(_options.ApiKey)}";
+        return page is null ? url : $"{url}&page={page}";
+    }
+
+    private static string Segment(MediaType mediaType) => mediaType == MediaType.Tv ? "tv" : "movie";
+
+    private static PagedResult<Title> Empty(int page) => new(Array.Empty<Title>(), page, 0, 0);
+
     private void EnsureConfigured()
     {
         if (string.IsNullOrWhiteSpace(_options.ApiKey))
             throw new InvalidOperationException("TMDB is not configured: Tmdb:ApiKey is missing.");
 
-        // BaseAddress is set in DI, but this makes failures obvious if DI is wrong
         if (_http.BaseAddress is null)
             throw new InvalidOperationException("TMDB HttpClient BaseAddress is not configured.");
     }
 
-    private static int ClampPage(int page)
-        => page < 1 ? 1 : page;
+    private static int ClampPage(int page) => page < 1 ? 1 : page;
 
-    private string NormalizeRegion(string region)
+    private string NormalizeRegion(string? region)
     {
-        // fallback to configured default
         if (string.IsNullOrWhiteSpace(region))
             region = _options.Region;
 
         region = region.Trim().ToUpperInvariant();
-
-        // TMDB expects 2-letter region codes; if not, fall back
-        if (region.Length != 2)
-            region = _options.Region;
-
-        return region;
+        return region.Length == 2 ? region : _options.Region;
     }
 }

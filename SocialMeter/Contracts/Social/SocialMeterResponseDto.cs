@@ -1,0 +1,76 @@
+using SocialMeter.Domain.Models;
+
+namespace SocialMeter.Contracts.Social;
+
+public sealed class SocialMeterResponseDto
+{
+    public int TmdbId { get; init; }
+    public MediaType MediaType { get; init; }
+    public string TitleName { get; init; } = "";
+
+    public SocialMeterScore Meter { get; init; } = new();
+
+    /// <summary>The most influential posts behind the score.</summary>
+    public IReadOnlyList<SocialPostDto> TopPosts { get; init; } = Array.Empty<SocialPostDto>();
+
+    public IReadOnlyList<SourceStatusDto> Sources { get; init; } = Array.Empty<SourceStatusDto>();
+
+    public DateTime LastRefreshedAt { get; init; }
+
+    /// <summary>True when this reading came straight from the cache without contacting the sources.</summary>
+    public bool FromCache { get; init; }
+}
+
+public sealed class SocialPostDto
+{
+    public int Id { get; init; }
+    public string Platform { get; init; } = "";
+    public string Author { get; init; } = "";
+    public string Content { get; init; } = "";
+    public Sentiment Sentiment { get; init; }
+    public double SentimentScore { get; init; }
+    public int Upvotes { get; init; }
+    public int Comments { get; init; }
+    public DateTime CreatedAt { get; init; }
+    public string? SourceUrl { get; init; }
+    public string? Community { get; init; }
+
+    /// <summary>True when the author is an established account counting at full weight. The weight itself is never exposed.</summary>
+    public bool Established { get; init; }
+
+    public static SocialPostDto From(SocialPost p) => new()
+    {
+        Id = p.Id,
+        Platform = p.Platform,
+        Author = p.Author,
+        Content = p.Content,
+        Sentiment = p.Sentiment,
+        SentimentScore = Math.Round(p.SentimentScore, 2),
+        Established = p.TrustWeight >= 1,
+        Upvotes = p.Upvotes,
+        Comments = p.Comments,
+        CreatedAt = p.CreatedAt,
+        SourceUrl = p.SourceUrl,
+        Community = p.Community
+    };
+}
+
+public sealed class SourceStatusDto
+{
+    public string Platform { get; init; } = "";
+    public bool Configured { get; init; }
+
+    /// <summary>Posts this source contributed on the last refresh; null when it was not contacted.</summary>
+    public int? Fetched { get; init; }
+
+    public string? Error { get; init; }
+}
+
+public sealed class SnapshotDto
+{
+    public int Score { get; init; }
+    public string Label { get; init; } = "";
+    public int TotalPosts { get; init; }
+    public double Confidence { get; init; }
+    public int? Momentum { get; init; }
+}
