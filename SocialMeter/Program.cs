@@ -47,8 +47,10 @@ builder.Services.AddHttpClient<RedditSource>();
 builder.Services.AddHttpClient<XSource>();
 
 // Social sources are resolved as a set; add a platform by registering another ISocialSource.
+builder.Services.AddHttpClient<SteamReviewSource>();
 builder.Services.AddScoped<ISocialSource>(sp => sp.GetRequiredService<RedditSource>());
 builder.Services.AddScoped<ISocialSource>(sp => sp.GetRequiredService<XSource>());
+builder.Services.AddScoped<ISocialSource>(sp => sp.GetRequiredService<SteamReviewSource>());
 
 // ---- Application services ----
 builder.Services.AddMemoryCache();
@@ -57,6 +59,7 @@ builder.Services.AddScoped<IRatingsService, RatingsService>();
 builder.Services.AddScoped<ISocialMeterService, SocialMeterService>();
 builder.Services.AddSingleton<ISentimentAnalyzer, LexiconSentimentAnalyzer>();
 builder.Services.AddSingleton<TrustPolicy>();
+builder.Services.AddSingleton<VerdictAssessor>();
 
 // Post assessment: Claude reads posts in context (is it about this title? how does the author feel about *it*?)
 // when an API key is configured; otherwise the word lexicon scores tone on its own.

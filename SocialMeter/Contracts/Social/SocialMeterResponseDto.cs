@@ -50,8 +50,16 @@ public sealed class SocialPostDto
     /// <summary>The platform flagged the post as possibly sensitive; show media only on request.</summary>
     public bool Sensitive { get; init; }
 
+    /// <summary>Steam's recommend / don't-recommend; null for ordinary posts.</summary>
+    public bool? VerdictUp { get; init; }
+
+    /// <summary>Hours played at the time of the review; null when unknown.</summary>
+    public double? PlaytimeHours { get; init; }
+
     public static SocialPostDto From(SocialPost p) => new()
     {
+        VerdictUp = p.VerdictUp,
+        PlaytimeHours = p.EngagementMinutes is { } m ? Math.Round(m / 60.0, 1) : null,
         Id = p.Id,
         Platform = p.Platform,
         Author = p.Author,

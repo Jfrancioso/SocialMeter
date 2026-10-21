@@ -14,6 +14,7 @@ public sealed class SocialMeterService : ISocialMeterService
     private readonly ITitleService _titles;
     private readonly IEnumerable<ISocialSource> _sources;
     private readonly IPostAssessor _assessor;
+    private readonly VerdictAssessor _verdicts;
     private readonly ITitleTracker _tracker;
     private readonly TrustPolicy _trust;
     private readonly SocialMeterOptions _options;
@@ -24,6 +25,7 @@ public sealed class SocialMeterService : ISocialMeterService
         ITitleService titles,
         IEnumerable<ISocialSource> sources,
         IPostAssessor assessor,
+        VerdictAssessor verdicts,
         ITitleTracker tracker,
         TrustPolicy trust,
         IOptions<SocialMeterOptions> options,
@@ -33,6 +35,7 @@ public sealed class SocialMeterService : ISocialMeterService
         _titles = titles;
         _sources = sources;
         _assessor = assessor;
+        _verdicts = verdicts;
         _tracker = tracker;
         _trust = trust;
         _options = options.Value;
@@ -172,16 +175,14 @@ public sealed class SocialMeterService : ISocialMeterService
 
             // Seeded demo posts are hand-labelled and never re-assessed.
             var toAssess = titlePosts
-                .Where(p => !p.ExternalId.StartsWith("seed-") && (force || p.Analyzer != _assessor.Name))
+                .Where(p => !p.ExternalId.StartsWith("seed-") && (force || p.Analyzer != AnalyzerFor(p)))
                 .ToList();
 
             if (toAssess.Count > 0)
             {
                 var title = await _titles.GetDetailsAsync(group.Key.MediaType, group.Key.TmdbId, ct)
                             ?? new Title { TmdbId = group.Key.TmdbId, MediaType = group.Key.MediaType, Name = "" };
-                var results = await _assessor.AssessAsync(title, toAssess.Select(ToCandidate).ToList(), ct);
-                for (var i = 0; i < toAssess.Count; i++)
-                    Apply(toAssess[i], results[i], _trust.Evaluate(ToCandidate(toAssess[i]), now));
+                await AssessAndApplyAsync(title, toAssess, now, ct);
                 assessed += toAssess.Count;
             }
 
@@ -197,13 +198,33 @@ public sealed class SocialMeterService : ISocialMeterService
         return assessed;
     }
 
+    /// <summary>Posts with an explicit platform verdict are scored by it; everything else goes to the configured assessor.</summary>
+    private async Task AssessAndApplyAsync(Title title, List<SocialPost> posts, DateTime now, CancellationToken ct)
+    {
+        var withVerdict = posts.Where(p => p.VerdictUp is not null).ToList();
+        foreach (var p in withVerdict)
+        {
+            var c = ToCandidate(p);
+            Apply(p, _verdicts.Assess(c), _trust.Evaluate(c, now), VerdictAssessor.AnalyzerName);
+        }
+
+        var freeText = posts.Where(p => p.VerdictUp is null).ToList();
+        if (freeText.Count == 0) return;
+
+        var results = await _assessor.AssessAsync(title, freeText.Select(ToCandidate).ToList(), ct);
+        for (var i = 0; i < freeText.Count; i++)
+            Apply(freeText[i], results[i], _trust.Evaluate(ToCandidate(freeText[i]), now), _assessor.Name);
+    }
+
+    private string AnalyzerFor(SocialPost p) => p.VerdictUp is null ? _assessor.Name : VerdictAssessor.AnalyzerName;
+
     /// <summary>Writes an assessment plus trust verdict onto a post. Trust exclusions win; otherwise an off-topic post is excluded.</summary>
-    private void Apply(SocialPost post, PostAssessment assessment, TrustVerdict trust)
+    private void Apply(SocialPost post, PostAssessment assessment, TrustVerdict trust, string analyzer)
     {
         var result = assessment.ToResult();
         post.Sentiment = result.Label;
         post.SentimentScore = result.Score;
-        post.Analyzer = _assessor.Name;
+        post.Analyzer = analyzer;
         post.AnalyzerNote = assessment.Note is null ? null : Trim(assessment.Note, 120);
         post.TrustWeight = trust.Weight;
         // The platform's flag or our own read of the image — either hides media behind a tap.
@@ -230,7 +251,8 @@ public sealed class SocialMeterService : ISocialMeterService
         p.Platform, p.ExternalId, p.Author, p.Content, p.Upvotes, p.Comments, p.CreatedAt, p.SourceUrl, p.Community,
         p.AuthorId, p.AuthorCreatedAt, p.AuthorReputation,
         p.MediaJson is null ? null : System.Text.Json.JsonSerializer.Deserialize<List<PostMedia>>(p.MediaJson),
-        p.Sensitive);
+        p.Sensitive,
+        p.VerdictUp, p.EngagementMinutes);
 
     private static string? SerializeMedia(IReadOnlyList<PostMedia>? media)
     {
@@ -282,9 +304,11 @@ public sealed class SocialMeterService : ISocialMeterService
                 post.AuthorId ??= c.AuthorId;
                 post.AuthorCreatedAt ??= c.AuthorCreatedAt;
                 post.AuthorReputation = c.AuthorReputation ?? post.AuthorReputation;
+                post.VerdictUp = c.VerdictUp ?? post.VerdictUp;
+                post.EngagementMinutes = c.EngagementMinutes ?? post.EngagementMinutes;
                 post.FetchedAt = now;
 
-                if (edited || post.Analyzer != _assessor.Name)
+                if (edited || post.Analyzer != AnalyzerFor(post))
                     toAssess.Add(post);
                 else
                 {
@@ -310,6 +334,8 @@ public sealed class SocialMeterService : ISocialMeterService
                 ContentHash = TrustPolicy.ContentHash(c.Content),
                 MediaJson = SerializeMedia(c.Media),
                 Sensitive = c.Sensitive,
+                VerdictUp = c.VerdictUp,
+                EngagementMinutes = c.EngagementMinutes,
                 Upvotes = c.Upvotes,
                 Comments = c.Comments,
                 CreatedAt = c.CreatedAt,
@@ -322,11 +348,7 @@ public sealed class SocialMeterService : ISocialMeterService
         }
 
         if (toAssess.Count > 0)
-        {
-            var assessments = await _assessor.AssessAsync(title, toAssess.Select(ToCandidate).ToList(), ct);
-            for (var i = 0; i < toAssess.Count; i++)
-                Apply(toAssess[i], assessments[i], _trust.Evaluate(ToCandidate(toAssess[i]), now));
-        }
+            await AssessAndApplyAsync(title, toAssess, now, ct);
 
         await _db.SaveChangesAsync(ct);
         return new SourceStatusDto { Platform = source.Platform, Configured = true, Fetched = candidates.Count };

@@ -73,6 +73,9 @@ namespace SocialMeter.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("EngagementMinutes")
+                        .HasColumnType("int");
+
                     b.Property<bool>("Excluded")
                         .HasColumnType("bit");
 
@@ -129,10 +132,16 @@ namespace SocialMeter.Migrations
                     b.Property<int>("Upvotes")
                         .HasColumnType("int");
 
+                    b.Property<bool?>("VerdictUp")
+                        .HasColumnType("bit");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ContentHash")
                         .HasDatabaseName("IX_SocialPosts_ContentHash");
+
+                    b.HasIndex("Platform")
+                        .HasDatabaseName("IX_SocialPosts_Platform");
 
                     b.HasIndex("Platform", "ExternalId")
                         .IsUnique()

@@ -1,5 +1,7 @@
 using System.Globalization;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using SocialMeter.Infrastructure.Data;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Links;
@@ -14,13 +16,15 @@ public sealed class RatingsService : IRatingsService
 
     private readonly OmdbClient _omdb;
     private readonly RatingLinkResolver _links;
+    private readonly SocialMeterDbContext _db;
     private readonly IMemoryCache _cache;
     private readonly ILogger<RatingsService> _logger;
 
-    public RatingsService(OmdbClient omdb, RatingLinkResolver links, IMemoryCache cache, ILogger<RatingsService> logger)
+    public RatingsService(OmdbClient omdb, RatingLinkResolver links, SocialMeterDbContext db, IMemoryCache cache, ILogger<RatingsService> logger)
     {
         _omdb = omdb;
         _links = links;
+        _db = db;
         _cache = cache;
         _logger = logger;
     }
@@ -33,7 +37,7 @@ public sealed class RatingsService : IRatingsService
 
         if (title.MediaType == MediaType.Game)
         {
-            var game = GameRatings(title);
+            var game = await GameRatingsAsync(title, ct);
             _cache.Set(key, game, CacheFor);
             return game;
         }
@@ -89,21 +93,44 @@ public sealed class RatingsService : IRatingsService
         return ratings;
     }
 
-    /// <summary>Games: Steam's own review score (already on the title) and Metacritic via the URL Steam supplies.</summary>
-    private static IReadOnlyList<ExternalRating> GameRatings(Title title)
+    /// <summary>
+    /// Games: Steam's all-time score (on the title), a 30-day score computed from the recent reviews SocialMeter
+    /// has read (Steam's summary endpoint ignores date ranges), and Metacritic via the URL Steam supplies.
+    /// </summary>
+    private async Task<IReadOnlyList<ExternalRating>> GameRatingsAsync(Title title, CancellationToken ct)
     {
-        var steamUrl = $"https://store.steampowered.com/app/{title.TmdbId}/";
+        var steamUrl = $"https://store.steampowered.com/app/{title.TmdbId}/#app_reviews_hash";
         var hasReviews = title.SteamReviewPercent is not null && title.SteamReviewCount > 0;
+
+        var since = DateTime.UtcNow.AddDays(-30);
+        var recent = await _db.SocialPosts
+            .Where(p => p.Platform == "steam" && p.MediaType == MediaType.Game && p.TmdbId == title.TmdbId
+                        && p.VerdictUp != null && p.CreatedAt >= since)
+            .GroupBy(_ => 1)
+            .Select(g => new { Total = g.Count(), Up = g.Count(p => p.VerdictUp == true) })
+            .FirstOrDefaultAsync(ct);
+
+        var hasRecent = recent is { Total: >= 5 };
+        var recentPct = hasRecent ? (int)Math.Round(100.0 * recent!.Up / recent.Total) : (int?)null;
 
         return new List<ExternalRating>
         {
             new()
             {
                 Source = "steam",
-                DisplayName = "Steam",
+                DisplayName = "Steam all-time",
                 Value = hasReviews ? $"{title.SteamReviewPercent}%" : null,
                 Normalized = hasReviews ? title.SteamReviewPercent : null,
                 Detail = hasReviews ? $"{title.SteamReviewLabel} · {title.SteamReviewCount:N0} reviews" : "No reviews yet",
+                Url = steamUrl
+            },
+            new()
+            {
+                Source = "steamRecent",
+                DisplayName = "Steam last 30 days",
+                Value = hasRecent ? $"{recentPct}%" : null,
+                Normalized = recentPct,
+                Detail = hasRecent ? $"{recent!.Up:N0} of the {recent.Total:N0} newest reviews we read" : "Not enough recent reviews read yet",
                 Url = steamUrl
             },
             new()

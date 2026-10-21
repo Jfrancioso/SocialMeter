@@ -150,6 +150,7 @@ public sealed class SteamClient
         });
     }
 
+    /// <summary>Steam's own all-time review summary. (The endpoint ignores day_range for the summary, so no "recent" variant.)</summary>
     private async Task<ReviewSummary?> GetReviewSummaryAsync(int appId, CancellationToken ct)
     {
         try

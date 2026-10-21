@@ -27,6 +27,12 @@ public sealed class SocialPost
     /// <summary>The platform flagged the post as possibly sensitive; the UI hides its media behind a tap.</summary>
     public bool Sensitive { get; set; }
 
+    /// <summary>Explicit recommend / don't-recommend from the platform (Steam). Null for free-text posts.</summary>
+    public bool? VerdictUp { get; set; }
+
+    /// <summary>Author's playtime at the time of the post (Steam). Null when unknown.</summary>
+    public int? EngagementMinutes { get; set; }
+
     /// <summary>Hash of the normalized content, used to catch copy-paste campaigns.</summary>
     public string ContentHash { get; set; } = "";
 

@@ -67,4 +67,15 @@ public sealed class SocialMeterOptions
 
     /// <summary>Posts carrying this many links or more are treated as promotional and halved.</summary>
     public int LinkSpamThreshold { get; set; } = 3;
+
+    // ---- Playtime trust (Steam reviews). When playtime is known it replaces the account-age signal. ----
+
+    /// <summary>Reviews written with less playtime than this are excluded — refund-window rants and drive-bys.</summary>
+    public int MinPlaytimeMinutes { get; set; } = 30;
+
+    /// <summary>Playtime at which a review counts at full weight; it ramps up from the minimum.</summary>
+    public int FullPlaytimeMinutes { get; set; } = 180;
+
+    /// <summary>Steam reviews can't be re-checked individually, so they are kept for a shorter window than posts.</summary>
+    public int SteamReviewRetentionDays { get; set; } = 120;
 }

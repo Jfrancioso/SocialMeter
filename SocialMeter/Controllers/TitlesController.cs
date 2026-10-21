@@ -88,14 +88,29 @@ public sealed class TitlesController : ControllerBase
         if (title is null) return NotFound();
 
         var ratings = await _ratings.GetRatingsAsync(title, ct);
-        var available = ratings.Where(r => r.Normalized is not null).Select(r => r.Normalized!.Value).ToList();
+
+        // Games compare "players right now" against Steam's all-time consensus; films and shows against the critics.
+        int? baseline;
+        string baselineLabel;
+        if (type == MediaType.Game)
+        {
+            baseline = ratings.FirstOrDefault(r => r.Source == "steam")?.Normalized;
+            baselineLabel = "Steam all-time";
+        }
+        else
+        {
+            var available = ratings.Where(r => r.Normalized is not null).Select(r => r.Normalized!.Value).ToList();
+            baseline = available.Count > 0 ? (int)Math.Round(available.Average()) : null;
+            baselineLabel = "critics";
+        }
 
         return Ok(new RatingsResponseDto
         {
             TmdbId = id,
             MediaType = type,
             Ratings = ratings,
-            CriticsAverage = available.Count > 0 ? (int)Math.Round(available.Average()) : null
+            CriticsAverage = baseline,
+            BaselineLabel = baselineLabel
         });
     }
 }

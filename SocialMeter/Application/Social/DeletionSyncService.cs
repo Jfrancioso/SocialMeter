@@ -40,9 +40,12 @@ public sealed class DeletionSyncService
         var affected = new HashSet<(MediaType, int)>();
 
         // 1. Retention: drop anything older than the window, whatever its state at the source.
+        //    Steam reviews can't be re-checked individually, so they get the shorter window.
         var cutoff = now.AddDays(-_options.RetentionDays);
+        var steamCutoff = now.AddDays(-_options.SteamReviewRetentionDays);
         var expired = await _db.SocialPosts
-            .Where(p => p.CreatedAt < cutoff && !p.ExternalId.StartsWith(SeedPrefix))
+            .Where(p => !p.ExternalId.StartsWith(SeedPrefix)
+                        && (p.CreatedAt < cutoff || (p.Platform == "steam" && p.CreatedAt < steamCutoff)))
             .ToListAsync(ct);
         foreach (var p in expired) affected.Add((p.MediaType, p.TmdbId));
         _db.SocialPosts.RemoveRange(expired);

@@ -20,6 +20,7 @@ public sealed partial class TrustPolicy
     public const string ReasonSameAccount = "additional post from the same account";
     public const string ReasonDuplicate = "duplicate of an earlier post";
     public const string ReasonOffTopic = "not about this title";
+    public const string ReasonTooLittlePlaytime = "too little playtime";
 
     private static readonly HashSet<string> CrossPostReasons = new() { ReasonSameAccount, ReasonDuplicate };
 
@@ -32,10 +33,30 @@ public sealed partial class TrustPolicy
 
     public TrustVerdict Evaluate(SocialPostCandidate c, DateTime nowUtc)
     {
-        if (Normalize(c.Content).Length < _o.MinContentLength)
+        // "10/10" with a thumbs-up is a complete review; the length rule is for free-text posts without a verdict.
+        if (c.VerdictUp is null && Normalize(c.Content).Length < _o.MinContentLength)
             return TrustVerdict.Exclude(ReasonTooShort);
 
         var weight = 1.0;
+
+        if (c.EngagementMinutes is { } played)
+        {
+            // Playtime is a far better "is this a real player" signal than account age or reputation
+            // (Steam reports 0 games owned for private profiles), so it replaces both.
+            if (played < _o.MinPlaytimeMinutes)
+                return TrustVerdict.Exclude(ReasonTooLittlePlaytime);
+
+            if (played < _o.FullPlaytimeMinutes)
+            {
+                var t = (played - _o.MinPlaytimeMinutes) / (double)Math.Max(1, _o.FullPlaytimeMinutes - _o.MinPlaytimeMinutes);
+                weight *= 0.5 + 0.5 * Math.Clamp(t, 0, 1);
+            }
+
+            if (c.VerifiedOwner == false) weight *= 0.7;
+            if (c.ReceivedForFree) weight *= 0.6;
+
+            return new TrustVerdict(Math.Round(Math.Clamp(weight, 0.05, 1), 3), null);
+        }
 
         if (c.AuthorCreatedAt is { } created)
         {
@@ -89,7 +110,10 @@ public sealed partial class TrustPolicy
         }
 
         // Copy-paste campaigns: identical text from different accounts counts once, for whoever said it first.
-        foreach (var group in live.Where(p => !p.Excluded && p.ContentHash.Length > 0).GroupBy(p => p.ContentHash))
+        // Short verdict reviews ("10/10", "peak") from different players are the same words, not a campaign.
+        foreach (var group in live
+                     .Where(p => !p.Excluded && p.ContentHash.Length > 0 && !(p.VerdictUp is not null && Normalize(p.Content).Length < 40))
+                     .GroupBy(p => p.ContentHash))
         {
             foreach (var dup in group.OrderBy(p => p.CreatedAt).Skip(1))
             {

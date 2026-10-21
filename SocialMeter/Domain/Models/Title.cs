@@ -34,7 +34,7 @@ public sealed class Title
     public int? MetacriticScore { get; init; }
     public string? MetacriticUrl { get; init; }
 
-    /// <summary>Steam's review summary: percent positive, its label ("Very Positive"), and how many reviews.</summary>
+    /// <summary>Steam's all-time review summary: percent positive, its label ("Very Positive"), and how many reviews.</summary>
     public int? SteamReviewPercent { get; init; }
     public string? SteamReviewLabel { get; init; }
     public int? SteamReviewCount { get; init; }
