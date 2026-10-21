@@ -7,6 +7,7 @@ using SocialMeter.Application.Ratings;
 using SocialMeter.Application.Social;
 using SocialMeter.Application.Titles;
 using SocialMeter.Infrastructure.Data;
+using SocialMeter.Infrastructure.Links;
 using SocialMeter.Infrastructure.Omdb;
 using SocialMeter.Infrastructure.Reddit;
 using SocialMeter.Infrastructure.Tmdb;
@@ -35,6 +36,7 @@ builder.Services.AddHttpClient<TmdbClient>((sp, http) =>
     http.BaseAddress = new Uri(opts.BaseUrl.EndsWith('/') ? opts.BaseUrl : opts.BaseUrl + "/");
 });
 builder.Services.AddHttpClient<OmdbClient>();
+builder.Services.AddHttpClient<RatingLinkResolver>();
 builder.Services.AddHttpClient<RedditSource>();
 builder.Services.AddHttpClient<XSource>();
 

@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.Extensions.Caching.Memory;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Domain.Models;
+using SocialMeter.Infrastructure.Links;
 using SocialMeter.Infrastructure.Omdb;
 
 namespace SocialMeter.Application.Ratings;
@@ -12,12 +13,14 @@ public sealed class RatingsService : IRatingsService
     private static readonly TimeSpan RetryFailedAfter = TimeSpan.FromMinutes(5);
 
     private readonly OmdbClient _omdb;
+    private readonly RatingLinkResolver _links;
     private readonly IMemoryCache _cache;
     private readonly ILogger<RatingsService> _logger;
 
-    public RatingsService(OmdbClient omdb, IMemoryCache cache, ILogger<RatingsService> logger)
+    public RatingsService(OmdbClient omdb, RatingLinkResolver links, IMemoryCache cache, ILogger<RatingsService> logger)
     {
         _omdb = omdb;
+        _links = links;
         _cache = cache;
         _logger = logger;
     }
@@ -59,10 +62,17 @@ public sealed class RatingsService : IRatingsService
         var imdbUrl = title.ImdbId is null ? null : $"https://www.imdb.com/title/{title.ImdbId}/";
         var rt = omdb?.Ratings?.FirstOrDefault(r => r.Source == "Rotten Tomatoes")?.Value;
 
+        // Rotten Tomatoes and Metacritic expose no id, so the resolver guesses and verifies their page URLs.
+        var rtTask = _links.RottenTomatoesAsync(title, ct);
+        var mcTask = _links.MetacriticAsync(title, ct);
+        await Task.WhenAll(rtTask, mcTask);
+        var rtUrl = rtTask.Result;
+        var mcUrl = mcTask.Result;
+
         ratings.Add(Build("imdb", "IMDb", omdb?.ImdbRating, ParseOutOfTen(omdb?.ImdbRating),
             omdb?.ImdbVotes is { } v && v != "N/A" ? $"{v} votes" : null, imdbUrl, "/10"));
-        ratings.Add(Build("rottenTomatoes", "Rotten Tomatoes", rt, ParsePercent(rt), "Tomatometer", null, ""));
-        ratings.Add(Build("metacritic", "Metacritic", omdb?.Metascore, ParseInt(omdb?.Metascore), "Metascore", null, "/100"));
+        ratings.Add(Build("rottenTomatoes", "Rotten Tomatoes", rt, ParsePercent(rt), "Tomatometer", rtUrl, ""));
+        ratings.Add(Build("metacritic", "Metacritic", omdb?.Metascore, ParseInt(omdb?.Metascore), "Metascore", mcUrl, "/100"));
 
         if (!_omdb.IsConfigured)
             _logger.LogDebug("OMDb not configured; IMDb/RT/Metacritic ratings unavailable.");

@@ -218,9 +218,11 @@ public sealed class SocialMeterService : ISocialMeterService
 
             if (existing.TryGetValue(c.ExternalId, out var post))
             {
-                // Engagement and account standing keep moving after a post is first seen; keep them current.
+                // Engagement, account standing and (edited) text keep moving after a post is first seen; keep them current.
                 post.Upvotes = c.Upvotes;
                 post.Comments = c.Comments;
+                post.Content = c.Content;
+                post.ContentHash = TrustPolicy.ContentHash(c.Content);
                 post.AuthorId ??= c.AuthorId;
                 post.AuthorCreatedAt ??= c.AuthorCreatedAt;
                 post.AuthorReputation = c.AuthorReputation ?? post.AuthorReputation;
