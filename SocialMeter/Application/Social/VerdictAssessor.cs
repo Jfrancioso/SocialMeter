@@ -29,6 +29,6 @@ public sealed class VerdictAssessor
         var score = direction * Math.Clamp(strength, 0.25, 1.0);
 
         var note = c.VerdictUp == true ? "Recommended on Steam" : "Not recommended on Steam";
-        return new PostAssessment(true, score, note);
+        return new PostAssessment(true, score, note, false, SubstanceHeuristic.Score(c.Content));
     }
 }

@@ -21,7 +21,7 @@ public sealed class LexiconPostAssessor : IPostAssessor
     public Task<IReadOnlyList<PostAssessment>> AssessAsync(Title title, IReadOnlyList<SocialPostCandidate> posts, CancellationToken ct = default)
     {
         var results = posts
-            .Select(p => new PostAssessment(true, _sentiment.Analyze(p.Content).Score, null))
+            .Select(p => new PostAssessment(true, _sentiment.Analyze(p.Content).Score, null, false, SubstanceHeuristic.Score(p.Content)))
             .ToList();
         return Task.FromResult<IReadOnlyList<PostAssessment>>(results);
     }

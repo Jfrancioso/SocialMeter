@@ -21,6 +21,9 @@ public sealed class SocialMeterScore
     /// <summary>Posts the trust policy set aside (too-new accounts, duplicates, pile-ons). Shown so the filtering is visible, not how.</summary>
     public int FilteredPosts { get; init; }
 
+    /// <summary>Counted posts with real substance (specific scenes, mechanics, an argument) rather than a bare reaction.</summary>
+    public int DetailedPosts { get; init; }
+
     public SentimentBreakdown Breakdown { get; init; } = new();
 
     /// <summary>How the last two weeks compare to the overall score; null when there is not enough recent data.</summary>

@@ -226,6 +226,7 @@ public sealed class SocialMeterService : ISocialMeterService
         post.SentimentScore = result.Score;
         post.Analyzer = analyzer;
         post.AnalyzerNote = assessment.Note is null ? null : Trim(assessment.Note, 120);
+        post.Substance = Math.Clamp(assessment.Substance, 0, 1);
         post.TrustWeight = trust.Weight;
         // The platform's flag or our own read of the image — either hides media behind a tap.
         post.Sensitive = post.Sensitive || assessment.SensitiveMedia;

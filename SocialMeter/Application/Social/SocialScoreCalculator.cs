@@ -55,6 +55,7 @@ public static class SocialScoreCalculator
             ConfidenceLabel = SocialMeterScore.ConfidenceLabelFor(confidence),
             TotalPosts = posts.Count,
             FilteredPosts = filtered,
+            DetailedPosts = posts.Count(p => p.Substance >= 0.6),
             Breakdown = new SentimentBreakdown
             {
                 Positive = posts.Count(p => p.Sentiment == Sentiment.Positive),
@@ -70,12 +71,13 @@ public static class SocialScoreCalculator
     public static double Engagement(SocialPost post)
         => 1 + 0.5 * Math.Log(1 + Math.Max(0, post.Upvotes)) + 0.25 * Math.Log(1 + Math.Max(0, post.Comments));
 
-    /// <summary>How much a post pulls the needle: engagement × recency × trust.</summary>
+    /// <summary>How much a post pulls the needle: engagement × recency × trust × substance. A bare "10/10" counts half as much as a detailed take.</summary>
     public static double Weight(SocialPost post, DateTime nowUtc)
     {
         var ageDays = Math.Max(0, (nowUtc - post.CreatedAt).TotalDays);
         var recency = Math.Max(0.3, Math.Exp(-ageDays / 90));
-        return Engagement(post) * recency * Math.Clamp(post.TrustWeight, 0, 1);
+        var substance = 0.5 + 0.5 * Math.Clamp(post.Substance, 0, 1);
+        return Engagement(post) * recency * Math.Clamp(post.TrustWeight, 0, 1) * substance;
     }
 
     private static int WeightedScore(IReadOnlyCollection<SocialPost> posts, DateTime nowUtc)

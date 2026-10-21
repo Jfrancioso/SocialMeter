@@ -28,6 +28,9 @@ public sealed class ClaudePostAssessor : IPostAssessor
            - is a reply or comment in a thread about something else (identifying a clip, arguing with a bot, tagging friends);
            - is news, a trailer or patch announcement, box-office, sales or ranking lists, promotion, giveaways, key resellers, or an ad;
            - is a question with no opinion ("has anyone seen it?", "does this run on Steam Deck?");
+           - only states that the author watched/played it, or wants to, with no reaction ("just finished it", "gonna start this tonight");
+           - is really about something else and name-drops the title along the way (a software update that reminded
+             them of an episode, a meme format, a tangent) — a passing reference is not a reaction;
            - is about an actor, director, studio, streamer or soundtrack as a person or work apart from this title;
            - for games: is a bug report, crash log, trade/LFG post, or server-status complaint with no view on the game itself.
 
@@ -46,6 +49,15 @@ public sealed class ClaudePostAssessor : IPostAssessor
            nudity or sexually suggestive imagery, graphic gore beyond ordinary film stills, or hateful content.
            Ordinary posters, screenshots and horror-movie stills are false. Posts without images are false.
 
+        4. substance — 0.0 to 1.0: how much of the author's actual experience with the title is in the post.
+           0.1 = a bare reaction with no content ("10/10", "peak", "trash", "loved it"); 0.3 = an opinion with one
+           general reason ("great visuals", "too long"); 0.6 = references to specific scenes, characters, episodes,
+           mechanics, systems or comparisons; 0.9+ = a developed argument with several specifics. Length alone is not
+           substance — a long rant that says nothing specific is 0.2. When about_title is false, substance is 0.
+
+        Source notes: X posts are short by nature — a concise, specific post can still be 0.6. Reddit posts with structure
+        and paragraphs usually carry more. Steam-style mentions of hours played or specific mechanics are substance.
+
         Keep each note under 12 words.
         """;
 
@@ -63,12 +75,13 @@ public sealed class ClaudePostAssessor : IPostAssessor
                 {
                     type = "object",
                     additionalProperties = false,
-                    required = new[] { "id", "about_title", "sentiment", "sensitive_media", "note" },
+                    required = new[] { "id", "about_title", "sentiment", "substance", "sensitive_media", "note" },
                     properties = new
                     {
                         id = new { type = "string" },
                         about_title = new { type = "boolean" },
                         sentiment = new { type = "number" },
+                        substance = new { type = "number" },
                         sensitive_media = new { type = "boolean" },
                         note = new { type = "string" }
                     }
@@ -148,7 +161,8 @@ public sealed class ClaudePostAssessor : IPostAssessor
                 throw new InvalidOperationException($"Assessment for post {i} missing from the response.");
 
             var sentiment = a.AboutTitle ? Math.Clamp(a.Sentiment, -1, 1) : 0;
-            results.Add(new PostAssessment(a.AboutTitle, sentiment, a.Note, a.SensitiveMedia));
+            var substance = a.AboutTitle ? Math.Clamp(a.Substance, 0, 1) : 0;
+            results.Add(new PostAssessment(a.AboutTitle, sentiment, a.Note, a.SensitiveMedia, substance));
         }
 
         _logger.LogInformation("Claude assessed {Count} posts about {Title}: {OffTopic} off-topic ({In}+{Out} tokens)",
@@ -213,6 +227,7 @@ public sealed class ClaudePostAssessor : IPostAssessor
         [JsonPropertyName("id")] public string Id { get; set; } = "";
         [JsonPropertyName("about_title")] public bool AboutTitle { get; set; }
         [JsonPropertyName("sentiment")] public double Sentiment { get; set; }
+        [JsonPropertyName("substance")] public double Substance { get; set; }
         [JsonPropertyName("sensitive_media")] public bool SensitiveMedia { get; set; }
         [JsonPropertyName("note")] public string? Note { get; set; }
     }

@@ -37,6 +37,20 @@ Migrations apply on start-up (connection string in `appsettings.json`). Without 
 shows the seeded demo posts for *Dune: Part Two* and *Gladiator II*. Swagger is at `/swagger`; `SocialMeter.http`
 has example requests.
 
+## Tests and evals
+
+`SocialMeter.Tests` holds two kinds of checks:
+
+```bash
+dotnet test --filter "Category!=Eval"   # unit tests: lexicon, trust policy, cross-post rules, verdict scoring, meter maths — fast, free
+dotnet test --filter "Category=Eval"    # the assessor eval: 48 hand-labelled real posts through Claude, ~5 cents a run
+```
+
+The eval (`SocialMeter.Tests/Evals/cases.json`) is the contract for the prompt: each case says whether a post is about
+the title and, if so, the acceptable sentiment and substance ranges. It asserts ≥ 90 % relevance accuracy and ≥ 85 % overall
+pass rate and writes `eval-report.md` beside the test assembly with every case's verdict and Claude's one-line reason.
+Change the prompt, run the eval, read the report — that is the loop. Add a case whenever a real post is misread.
+
 ## Endpoints
 
 | Route | Purpose |

@@ -88,6 +88,7 @@ public class SocialMeterDbContext : DbContext
             SentimentScore = score,
             Analyzer = "seed",
             TrustWeight = 1,
+            Substance = SubstanceHeuristic.Score(content),
             Excluded = false,
             Upvotes = upvotes,
             Comments = comments,

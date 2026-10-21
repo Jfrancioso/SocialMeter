@@ -53,12 +53,16 @@ public sealed class SocialPostDto
     /// <summary>Steam's recommend / don't-recommend; null for ordinary posts.</summary>
     public bool? VerdictUp { get; init; }
 
+    /// <summary>True when the post carries real substance (specifics, an argument) rather than a bare reaction.</summary>
+    public bool Detailed { get; init; }
+
     /// <summary>Hours played at the time of the review; null when unknown.</summary>
     public double? PlaytimeHours { get; init; }
 
     public static SocialPostDto From(SocialPost p) => new()
     {
         VerdictUp = p.VerdictUp,
+        Detailed = p.Substance >= 0.6,
         PlaytimeHours = p.EngagementMinutes is { } m ? Math.Round(m / 60.0, 1) : null,
         Id = p.Id,
         Platform = p.Platform,

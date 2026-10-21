@@ -123,6 +123,9 @@ namespace SocialMeter.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<double>("Substance")
+                        .HasColumnType("float");
+
                     b.Property<int>("TmdbId")
                         .HasColumnType("int");
 
@@ -175,6 +178,7 @@ namespace SocialMeter.Migrations
                             Sentiment = "Positive",
                             SentimentScore = 0.84999999999999998,
                             SourceUrl = "https://www.reddit.com/r/movies/",
+                            Substance = 0.46000000000000002,
                             TmdbId = 693134,
                             TrustWeight = 1.0,
                             Upvotes = 234
@@ -201,6 +205,7 @@ namespace SocialMeter.Migrations
                             Sentiment = "Negative",
                             SentimentScore = -0.69999999999999996,
                             SourceUrl = "https://www.reddit.com/r/TrueFilm/",
+                            Substance = 0.35999999999999999,
                             TmdbId = 693134,
                             TrustWeight = 1.0,
                             Upvotes = 67
@@ -227,6 +232,7 @@ namespace SocialMeter.Migrations
                             Sentiment = "Positive",
                             SentimentScore = 0.69999999999999996,
                             SourceUrl = "https://www.reddit.com/r/movies/",
+                            Substance = 0.33000000000000002,
                             TmdbId = 693134,
                             TrustWeight = 1.0,
                             Upvotes = 456
@@ -253,6 +259,7 @@ namespace SocialMeter.Migrations
                             Sentiment = "Neutral",
                             SentimentScore = 0.050000000000000003,
                             SourceUrl = "https://www.reddit.com/r/moviesuggestions/",
+                            Substance = 0.28000000000000003,
                             TmdbId = 693134,
                             TrustWeight = 1.0,
                             Upvotes = 12
@@ -279,6 +286,7 @@ namespace SocialMeter.Migrations
                             Sentiment = "Positive",
                             SentimentScore = 0.90000000000000002,
                             SourceUrl = "https://www.reddit.com/r/dune/",
+                            Substance = 0.55000000000000004,
                             TmdbId = 693134,
                             TrustWeight = 1.0,
                             Upvotes = 789
@@ -305,6 +313,7 @@ namespace SocialMeter.Migrations
                             Sentiment = "Negative",
                             SentimentScore = -0.59999999999999998,
                             SourceUrl = "https://www.reddit.com/r/books/",
+                            Substance = 0.29999999999999999,
                             TmdbId = 693134,
                             TrustWeight = 1.0,
                             Upvotes = 45
@@ -331,6 +340,7 @@ namespace SocialMeter.Migrations
                             Sentiment = "Positive",
                             SentimentScore = 0.59999999999999998,
                             SourceUrl = "https://www.reddit.com/r/movies/",
+                            Substance = 0.34000000000000002,
                             TmdbId = 693134,
                             TrustWeight = 1.0,
                             Upvotes = 123
@@ -357,6 +367,7 @@ namespace SocialMeter.Migrations
                             Sentiment = "Positive",
                             SentimentScore = 0.45000000000000001,
                             SourceUrl = "https://www.reddit.com/r/cinematography/",
+                            Substance = 0.34000000000000002,
                             TmdbId = 693134,
                             TrustWeight = 1.0,
                             Upvotes = 234
@@ -383,6 +394,7 @@ namespace SocialMeter.Migrations
                             Sentiment = "Negative",
                             SentimentScore = -0.69999999999999996,
                             SourceUrl = "https://www.reddit.com/r/movies/",
+                            Substance = 0.41999999999999998,
                             TmdbId = 558449,
                             TrustWeight = 1.0,
                             Upvotes = 345
@@ -409,6 +421,7 @@ namespace SocialMeter.Migrations
                             Sentiment = "Positive",
                             SentimentScore = 0.75,
                             SourceUrl = "https://www.reddit.com/r/movies/",
+                            Substance = 0.23000000000000001,
                             TmdbId = 558449,
                             TrustWeight = 1.0,
                             Upvotes = 156

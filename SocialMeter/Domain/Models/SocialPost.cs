@@ -48,6 +48,9 @@ public sealed class SocialPost
     /// <summary>0–1 multiplier from the trust policy (account age, reputation, content quality). Never exposed raw.</summary>
     public double TrustWeight { get; set; } = 1;
 
+    /// <summary>0–1: how much actual experience the post contains. A detailed take outweighs "10/10".</summary>
+    public double Substance { get; set; } = 0.5;
+
     /// <summary>Excluded posts are kept for auditing but never count toward the score or show in the feed.</summary>
     public bool Excluded { get; set; }
     public string? ExclusionReason { get; set; }
