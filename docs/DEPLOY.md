@@ -92,8 +92,16 @@ The API reads the visitor's address from `CF-Connecting-IP` only when the connec
 ranges (`Web/ClientAddress.cs`); otherwise per-visitor limits would be shared by everyone at one Cloudflare location.
 Update that list if Cloudflare changes https://www.cloudflare.com/ips-v4 or ips-v6.
 
-The Cloudflare API token lives in Key Vault (`cloudflare-api-token`), scoped to this zone. A rate-limiting rule needs
-the token's **Zone WAF: Edit** permission, not yet granted; the API's own per-visitor limits apply meanwhile.
+The Cloudflare API token lives in Key Vault (`cloudflare-api-token`), scoped to this zone (DNS, Zone Settings, SSL and
+Certificates, Single Redirect, Bot Management, Firewall Services, Zone WAF; all Edit).
+
+WAF rules (free plan):
+
+- **Rate limit:** more than 50 requests in 10 s from one visitor to api.chatterbub.com is blocked for 10 s, at the edge,
+  before Azure sees it. The API's own limits (60/min, 20/min on bulk reads) still apply behind it.
+- **Operator lock:** `/api/operator/*` on api.chatterbub.com is blocked for every address except Joey's home IPv4 and
+  IPv6 /64. Home addresses change; when they do, operator calls through api.chatterbub.com get Cloudflare's 403. Fix it
+  under Security, WAF, Custom rules in the dashboard, or ask for the rule to be updated. The admin key is still required.
 
 Still direct-reachable: `socialmeter-jf-api.azurewebsites.net` bypasses Cloudflare (app limits still apply). Locking the
 App Service to Cloudflare's ranges closes that, once the deploy smoke test no longer depends on the Azure hostname.
