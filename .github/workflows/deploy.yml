@@ -30,9 +30,12 @@ jobs:
     needs: test
     if: vars.AZURE_WEBAPP_NAME != ''
     runs-on: ubuntu-latest
+    # The App Service only answers Cloudflare, so the health check goes through the public address like any visitor.
+    env:
+      API_URL: ${{ vars.API_PUBLIC_URL || 'https://api.chatterbub.com' }}
     environment:
       name: production
-      url: https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net
+      url: ${{ vars.API_PUBLIC_URL || 'https://api.chatterbub.com' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -52,7 +55,7 @@ jobs:
       - name: Smoke test
         run: |
           for i in $(seq 1 20); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/health")
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/api/health")
             [ "$code" = "200" ] && echo "healthy" && exit 0
             sleep 15
           done

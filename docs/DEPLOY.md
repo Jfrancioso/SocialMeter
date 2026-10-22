@@ -103,5 +103,31 @@ WAF rules (free plan):
   IPv6 /64. Home addresses change; when they do, operator calls through api.chatterbub.com get Cloudflare's 403. Fix it
   under Security, WAF, Custom rules in the dashboard, or ask for the rule to be updated. The admin key is still required.
 
-Still direct-reachable: `socialmeter-jf-api.azurewebsites.net` bypasses Cloudflare (app limits still apply). Locking the
-App Service to Cloudflare's ranges closes that, once the deploy smoke test no longer depends on the Azure hostname.
+**Origin lock (2026-10-22):** the App Service only accepts connections from Cloudflare's published ranges (access
+restriction rules `cloudflare-v4-a`, `cloudflare-v4-b`, `cloudflare-v6`, then "Deny all"), so
+`socialmeter-jf-api.azurewebsites.net` answers 403 and every request passes the WAF above. The deployment endpoint
+(`.scm.azurewebsites.net`) keeps its own "Allow all" rule because GitHub Actions deploys through it with the publish
+profile, and the deploy smoke test checks `https://api.chatterbub.com/api/health` (override with the `API_PUBLIC_URL`
+repository variable). When Cloudflare changes its ranges, update these rules and `Web/ClientAddress.cs` together:
+
+```bash
+az webapp config access-restriction show -g socialmeter-jf-rg -n socialmeter-jf-api
+```
+
+Residual gap: the rules admit any traffic from Cloudflare's network, including another Cloudflare account that points
+its own hostname at this App Service. Closing that needs a secret header added by a Cloudflare Transform Rule and
+checked by the API (the token would need Transform Rules permission).
+
+## Ratings sources
+
+TMDB comes with each title. IMDb's number comes from IMDb's daily ratings file (`Infrastructure/Imdb`, about 8 MB,
+downloaded at start-up and every 24 h), falling back to OMDb. Rotten Tomatoes and Metacritic come from OMDb, and when OMDb
+has none (new releases, most TV) from the critics' score each site publishes in its page's structured data
+(`PublishedScoreReader`, cached 12 h, release year must match within a year). Terms to keep in mind:
+
+- IMDb's datasets are licensed for personal and non-commercial use only. The footer carries IMDb's credit line. If
+  Chatterbub ever earns money, licence the data from IMDb or drop the file and rely on OMDb.
+- Rotten Tomatoes' and Metacritic's terms restrict automated access. The reader is gentle (one cached request per page)
+  and can be switched off without a deploy: set the app setting `Ratings__ReadPublishedScores=false`.
+- TMDB's terms require the "uses the TMDB API but is not endorsed or certified by TMDB" notice (in the footer) and
+  their logo in an about or credits section.
