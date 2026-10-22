@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Application.Common;
@@ -53,6 +54,7 @@ public sealed class SocialMeterController : ControllerBase
 
     /// <summary>Why the reading is what it is: effective posts, margin, weight by sentiment and substance, the posts that pull hardest.</summary>
     [HttpGet("{type}/{id:int}/explain")]
+    [EnableRateLimiting(Web.DependencyInjection.ReadsPolicy)]
     public async Task<ActionResult<ScoreExplanationDto>> Explain([FromRoute] MediaType type, [FromRoute] int id, CancellationToken ct = default)
     {
         var result = await _explainer.ExplainAsync(type, id, ct);
@@ -61,10 +63,12 @@ public sealed class SocialMeterController : ControllerBase
 
     /// <summary>One reading per day plus the Mann-Kendall trend verdict over the configured window.</summary>
     [HttpGet("{type}/{id:int}/history")]
+    [EnableRateLimiting(Web.DependencyInjection.ReadsPolicy)]
     public async Task<ActionResult<ScoreHistoryDto>> History([FromRoute] MediaType type, [FromRoute] int id, [FromQuery] int days = 30, CancellationToken ct = default)
         => Ok(await _queries.GetHistoryAsync(type, id, days, ct));
 
     [HttpGet("{type}/{id:int}/posts")]
+    [EnableRateLimiting(Web.DependencyInjection.ReadsPolicy)]
     public async Task<ActionResult<PagedResult<SocialPostDto>>> Posts(
         [FromRoute] MediaType type,
         [FromRoute] int id,
@@ -77,6 +81,7 @@ public sealed class SocialMeterController : ControllerBase
 
     /// <summary>Cached readings for many titles at once, e.g. ?keys=movie:693134,tv:1399. Never contacts the sources.</summary>
     [HttpGet("snapshots")]
+    [EnableRateLimiting(Web.DependencyInjection.ReadsPolicy)]
     public async Task<ActionResult<IReadOnlyDictionary<string, SnapshotDto>>> Snapshots([FromQuery] string keys = "", CancellationToken ct = default)
     {
         var parsed = new List<(MediaType, int)>();
@@ -87,8 +92,8 @@ public sealed class SocialMeterController : ControllerBase
                 parsed.Add((type, id));
         }
 
-        if (parsed.Count > 200)
-            return BadRequest(new { error = "At most 200 keys per request." });
+        if (parsed.Count > 60)
+            return BadRequest(new { error = "At most 60 keys per request." });
 
         return Ok(await _queries.GetSnapshotsAsync(parsed, ct));
     }

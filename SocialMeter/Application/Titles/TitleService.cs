@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Steam;
@@ -8,14 +9,19 @@ namespace SocialMeter.Application.Titles;
 /// <summary>Routes each request to the provider for its kind: TMDB for movies and shows, Steam for games.</summary>
 public sealed class TitleService : ITitleService
 {
+    private static readonly TimeSpan DetailsCacheFor = TimeSpan.FromHours(6);
+    private static readonly TimeSpan MissCacheFor = TimeSpan.FromMinutes(10);
+
     private readonly TmdbClient _tmdb;
     private readonly SteamClient _steam;
+    private readonly IMemoryCache _cache;
     private readonly ILogger<TitleService> _logger;
 
-    public TitleService(TmdbClient tmdb, SteamClient steam, ILogger<TitleService> logger)
+    public TitleService(TmdbClient tmdb, SteamClient steam, IMemoryCache cache, ILogger<TitleService> logger)
     {
         _tmdb = tmdb;
         _steam = steam;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -48,8 +54,20 @@ public sealed class TitleService : ITitleService
     public Task<PagedResult<Title>> GetComingSoonGamesAsync(int page = 1, CancellationToken ct = default)
         => _steam.GetComingSoonAsync(page, ct);
 
-    public Task<Title?> GetDetailsAsync(MediaType mediaType, int id, CancellationToken ct = default)
-        => mediaType == MediaType.Game ? _steam.GetDetailsAsync(id, ct) : _tmdb.GetDetailsAsync(mediaType, id, ct);
+    /// <summary>
+    /// Title details are requested by every page view and by every scoring pass, and they change slowly. Caching them
+    /// also means walking the id space costs the provider quota once per title per six hours, not once per request.
+    /// </summary>
+    public async Task<Title?> GetDetailsAsync(MediaType mediaType, int id, CancellationToken ct = default)
+    {
+        var key = $"title:{mediaType}:{id}";
+        if (_cache.TryGetValue(key, out Title? cached))
+            return cached;
+
+        var title = mediaType == MediaType.Game ? await _steam.GetDetailsAsync(id, ct) : await _tmdb.GetDetailsAsync(mediaType, id, ct);
+        _cache.Set(key, title, title is null ? MissCacheFor : DetailsCacheFor);
+        return title;
+    }
 
     public async Task<PagedResult<Title>> SearchAsync(string query, MediaType? mediaType, int page = 1, CancellationToken ct = default)
     {

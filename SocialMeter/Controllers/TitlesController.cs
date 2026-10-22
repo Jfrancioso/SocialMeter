@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Contracts.Titles;
 using SocialMeter.Domain.Models;
@@ -22,6 +23,7 @@ public sealed class TitlesController : ControllerBase
 
     /// <summary>Search movies and shows together, or one kind with ?type=movie|tv. Each result says whether it is tracked.</summary>
     [HttpGet("search")]
+    [EnableRateLimiting(Web.DependencyInjection.ReadsPolicy)]
     public async Task<ActionResult<PagedResult<Title>>> Search([FromQuery] string query, [FromQuery] MediaType? type = null, [FromQuery] int page = 1, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(query))

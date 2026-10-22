@@ -9,6 +9,9 @@ namespace SocialMeter.Application.Social;
 /// <summary>Read-only queries over stored posts and cached readings. Never contacts a source.</summary>
 public sealed class PostQueryService : IPostQueries
 {
+    public const int MaxPageSize = 12;
+    public const int MaxPages = 10;
+
     private readonly SocialMeterDbContext _db;
     private readonly ScoreHistoryService _history;
 
@@ -20,8 +23,9 @@ public sealed class PostQueryService : IPostQueries
 
     public async Task<PagedResult<SocialPostDto>> GetPostsAsync(MediaType mediaType, int tmdbId, Sentiment? sentiment, string? platform, int page, int pageSize, CancellationToken ct = default)
     {
-        page = Math.Max(1, page);
-        pageSize = Math.Clamp(pageSize, 1, 100);
+        // The page shows twelve at a time and loads more on request; capping both bounds what any client can harvest per title.
+        page = Math.Clamp(page, 1, MaxPages);
+        pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
 
         var query = _db.SocialPosts.Where(p => p.TmdbId == tmdbId && p.MediaType == mediaType && !p.Excluded);
         if (sentiment is not null) query = query.Where(p => p.Sentiment == sentiment);
