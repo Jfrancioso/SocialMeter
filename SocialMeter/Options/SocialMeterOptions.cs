@@ -111,4 +111,7 @@ public sealed class SocialMeterOptions
 
     /// <summary>Steam reviews can't be re-checked individually, so they are kept for a shorter window than posts.</summary>
     public int SteamReviewRetentionDays { get; set; } = 120;
+
+    /// <summary>Refresh-log rows (title, time, outcome; nothing about the visitor) are deleted after this many days.</summary>
+    public int RefreshLogRetentionDays { get; set; } = 90;
 }

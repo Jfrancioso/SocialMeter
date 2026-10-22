@@ -15,6 +15,7 @@ public class SocialMeterDbContext : DbContext
     public DbSet<TitleSnapshot> TitleSnapshots => Set<TitleSnapshot>();
     public DbSet<TrackedTitle> TrackedTitles => Set<TrackedTitle>();
     public DbSet<ScoreHistory> ScoreHistory => Set<ScoreHistory>();
+    public DbSet<RefreshLog> RefreshLogs => Set<RefreshLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -60,6 +61,16 @@ public class SocialMeterDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.MediaType).HasConversion<string>().HasMaxLength(10).IsRequired();
             entity.HasIndex(e => new { e.TmdbId, e.MediaType, e.Day }).IsUnique().HasDatabaseName("UX_ScoreHistory_Title_Day");
+        });
+
+        modelBuilder.Entity<RefreshLog>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.MediaType).HasConversion<string>().HasMaxLength(10).IsRequired();
+            entity.Property(e => e.TitleName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Trigger).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.Outcome).IsRequired().HasMaxLength(20);
+            entity.HasIndex(e => e.At).HasDatabaseName("IX_RefreshLogs_At");
         });
 
         modelBuilder.Entity<TitleSnapshot>(entity =>

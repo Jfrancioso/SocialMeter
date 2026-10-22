@@ -68,6 +68,10 @@ public sealed class DeletionSyncService
         _db.SocialPosts.RemoveRange(expired);
         result.Expired = expired.Count;
 
+        // The refresh log keeps a short window: it records no visitor, but it has no reason to grow forever.
+        var logCutoff = now.AddDays(-Math.Max(1, _options.RefreshLogRetentionDays));
+        await _db.RefreshLogs.Where(r => r.At < logCutoff).ExecuteDeleteAsync(ct);
+
         // 2. Re-check posts that haven't been confirmed recently, per platform.
         var recheckBefore = now.AddHours(-_options.RecheckAfterHours);
         foreach (var source in _sources)

@@ -118,6 +118,27 @@ Residual gap: the rules admit any traffic from Cloudflare's network, including a
 its own hostname at this App Service. Closing that needs a secret header added by a Cloudflare Transform Rule and
 checked by the API (the token would need Transform Rules permission).
 
+## Refresh log
+
+Every Refresh press, and every page view that triggers a live pull, adds a row to `RefreshLogs`: time (UTC), title,
+trigger (`button` or `page`), whether the sources were contacted, the outcome (`pulled`, `cooldown`, `not-tracked`,
+`budget-reached`) and how many posts came back. Nothing about the visitor is stored. Presses refused by the
+per-visitor limit are turned away before the database is touched and are not logged, so spamming the button cannot
+keep the free database awake. Rows older than `SocialMeter:RefreshLogRetentionDays` (90) are deleted by the deletion
+sync. Queries for SSMS:
+
+```sql
+-- Latest presses and pulls
+SELECT TOP 50 At, TitleName, [Trigger], Pulled, Outcome, PostsFetched FROM RefreshLogs ORDER BY At DESC;
+
+-- Per day: presses, pulls that ran (these spend X credits), posts fetched
+SELECT CAST(At AS date) AS DayUtc,
+       SUM(CASE WHEN [Trigger] = 'button' THEN 1 ELSE 0 END) AS Presses,
+       SUM(CASE WHEN Pulled = 1 THEN 1 ELSE 0 END) AS Pulls,
+       SUM(ISNULL(PostsFetched, 0)) AS PostsFetched
+FROM RefreshLogs GROUP BY CAST(At AS date) ORDER BY DayUtc DESC;
+```
+
 ## Ratings sources
 
 TMDB comes with each title. IMDb's number comes from IMDb's daily ratings file (`Infrastructure/Imdb`, about 8 MB,

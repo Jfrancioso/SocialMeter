@@ -65,7 +65,7 @@ public sealed class SocialMeterService : ISocialMeterService
         using var _ = await _gate.AcquireAsync(mediaType, tmdbId, ct);
 
         var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == tmdbId && s.MediaType == mediaType, ct);
-        var (pull, sourceStatus) = await DecideAndPullAsync(title, snapshot, tracked, forceRefresh, now, ct);
+        var (pull, sourceStatus, outcome) = await DecideAndPullAsync(title, snapshot, tracked, forceRefresh, now, ct);
 
         var posts = await _db.SocialPosts.Where(p => p.TmdbId == tmdbId && p.MediaType == mediaType).ToListAsync(ct);
         if (pull)
@@ -76,6 +76,8 @@ public sealed class SocialMeterService : ISocialMeterService
 
         var meter = SocialScoreCalculator.Compute(posts, now, _options.Scoring);
         snapshot = await PersistAsync(snapshot, meter, mediaType, tmdbId, pull, sourceStatus, now, ct);
+        if (forceRefresh || pull)
+            await LogRefreshAsync(title, forceRefresh, pull, outcome, sourceStatus, now, ct);
 
         var counted = posts.Where(p => !p.Excluded).ToList();
         var totalWeight = counted.Sum(p => SocialScoreCalculator.Weight(p, now));
@@ -101,28 +103,59 @@ public sealed class SocialMeterService : ISocialMeterService
         };
     }
 
-    /// <summary>Whether to pull now, and the per-source outcome either way.</summary>
-    private async Task<(bool Pulled, List<SourceStatusDto> Status)> DecideAndPullAsync(Title title, TitleSnapshot? snapshot, bool tracked, bool forceRefresh, DateTime now, CancellationToken ct)
+    /// <summary>Whether to pull now, the per-source outcome either way, and the outcome word for the refresh log.</summary>
+    private async Task<(bool Pulled, List<SourceStatusDto> Status, string Outcome)> DecideAndPullAsync(Title title, TitleSnapshot? snapshot, bool tracked, bool forceRefresh, DateTime now, CancellationToken ct)
     {
         var sinceRefresh = snapshot is null ? TimeSpan.MaxValue : now - snapshot.LastRefreshedAt;
         var stale = sinceRefresh > TimeSpan.FromHours(_options.RefreshAfterHours);
         var recentlyPulled = sinceRefresh < TimeSpan.FromMinutes(_options.MinForcedRefreshMinutes);
-        var wantsPull = tracked && (stale || (forceRefresh && !recentlyPulled));
+        var decision = PullPolicy.Decide(tracked, stale, forceRefresh, recentlyPulled);
 
-        if (!wantsPull)
-            return (false, Idle(null));
+        if (decision != PullDecision.Pull)
+            return (false, Idle(null), PullPolicy.OutcomeName(decision, budgetRefused: false));
 
         if (!_budget.TryAcquirePull())
         {
             // The hourly ceiling is the last line against a runaway bill; the reader sees the cache and the reason.
             _logger.LogWarning("Live pull budget exhausted; serving cached reading for {Type} {Id}", title.MediaType, title.TmdbId);
-            return (false, Idle("Live reads paused: hourly budget reached"));
+            return (false, Idle("Live reads paused: hourly budget reached"), PullPolicy.OutcomeName(decision, budgetRefused: true));
         }
 
         var status = new List<SourceStatusDto>();
         foreach (var source in _sources)
             status.Add(await _ingestion.IngestAsync(source, title, now, ct));
-        return (true, status);
+        return (true, status, PullPolicy.OutcomeName(decision, budgetRefused: false));
+    }
+
+    /// <summary>
+    /// Notes a Refresh press or a pull in RefreshLogs: title, time, trigger and outcome, never who asked. Only requests
+    /// that already used the database get here (per-visitor refusals are turned away earlier, in the controller), so
+    /// logging adds one small row to work already under way and never wakes a paused database. A failed write is logged
+    /// and ignored: the reading the reader asked for matters more than the record of it.
+    /// </summary>
+    private async Task LogRefreshAsync(Title title, bool forceRefresh, bool pulled, string outcome, List<SourceStatusDto> status, DateTime now, CancellationToken ct)
+    {
+        var entry = _db.RefreshLogs.Add(new RefreshLog
+        {
+            At = now,
+            MediaType = title.MediaType,
+            TmdbId = title.TmdbId,
+            TitleName = title.Name.Length > 200 ? title.Name[..200] : title.Name,
+            Trigger = forceRefresh ? "button" : "page",
+            Pulled = pulled,
+            Outcome = outcome,
+            PostsFetched = pulled ? status.Sum(s => s.Fetched ?? 0) : null
+        });
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            entry.State = EntityState.Detached;
+            _logger.LogWarning(ex, "Could not record refresh for {Type} {Id}", title.MediaType, title.TmdbId);
+        }
     }
 
     private List<SourceStatusDto> Idle(string? note) => _sources
