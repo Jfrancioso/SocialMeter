@@ -55,7 +55,7 @@ public sealed class ClaudePostAssessor : IPostAssessor
            mechanics, systems or comparisons; 0.9+ = a developed argument with several specifics. Length alone is not
            substance — a long rant that says nothing specific is 0.2. When about_title is false, substance is 0.
 
-        Source notes: X posts are short by nature — a concise, specific post can still be 0.6. Reddit posts with structure
+        Source notes: X and Bluesky posts are short by nature — a concise, specific post can still be 0.6. Reddit posts with structure
         and paragraphs usually carry more. Steam-style mentions of hours played or specific mechanics are substance.
 
         Keep each note under 12 words.
@@ -206,7 +206,7 @@ public sealed class ClaudePostAssessor : IPostAssessor
         {
             var p = batch[i];
             sb.Append("[id=").Append(i).Append("] ")
-              .Append(p.Platform == "x" ? "X @" : "Reddit u/").Append(p.Author);
+              .Append(p.Platform switch { "x" => "X @", "bluesky" => "Bluesky @", _ => "Reddit u/" }).Append(p.Author);
             if (p.Community is not null) sb.Append(" in r/").Append(p.Community);
             if (p.Media is { Count: > 0 }) sb.Append(" (").Append(p.Media.Count).Append(p.Media.Count == 1 ? " image attached" : " images attached").Append(')');
             sb.AppendLine(":");

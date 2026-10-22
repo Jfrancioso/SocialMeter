@@ -5,7 +5,7 @@ namespace SocialMeter.Application.Abstractions;
 /// <summary>A social platform SocialMeter can pull posts from. Register one per platform.</summary>
 public interface ISocialSource
 {
-    /// <summary>Stable key stored on each post: "reddit", "x".</summary>
+    /// <summary>Stable key stored on each post: "reddit", "x", "steam", "bluesky".</summary>
     string Platform { get; }
 
     /// <summary>False when the credentials the source needs are missing; the source is then reported but skipped.</summary>

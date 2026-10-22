@@ -118,6 +118,18 @@ Residual gap: the rules admit any traffic from Cloudflare's network, including a
 its own hostname at this App Service. Closing that needs a secret header added by a Cloudflare Transform Rule and
 checked by the API (the token would need Transform Rules permission).
 
+## Bluesky source
+
+Bluesky is read through an ordinary account with an app password (Bluesky settings, Privacy and security, App
+passwords). App settings `Bluesky__Identifier` and `Bluesky__AppPassword` hold them in production; locally they are
+user secrets. Reading Bluesky is free. The process signs in once and refreshes its token hourly, because Bluesky
+limits sign-ins per account. Each pull scans up to 300 matching posts from the last 7 days, keeps the 40 most-liked
+that name the kind of title and are not replies or promo, and Claude reads the new ones (about a third of a cent each
+on Opus). `Bluesky__MaxResults` is the cost dial. Revoke the app password in Bluesky to cut the source off instantly.
+
+The live check `dotnet test SocialMeter.Tests --filter "FullyQualifiedName~BlueskyLiveCheck"` signs in with the local
+user secrets and fetches one title without touching X or Claude.
+
 ## Refresh log
 
 Every Refresh press, and every page view that triggers a live pull, adds a row to `RefreshLogs`: time (UTC), title,

@@ -109,7 +109,7 @@ public sealed class ScoreExplainer : IScoreExplainer
         return notes;
     }
 
-    private static string PlatformName(string platform) => platform switch { "x" => "X", "reddit" => "Reddit", "steam" => "Steam", _ => platform };
+    private static string PlatformName(string platform) => platform switch { "x" => "X", "reddit" => "Reddit", "steam" => "Steam", "bluesky" => "Bluesky", _ => platform };
 
     private static string Trim(string s, int max) => s.Length <= max ? s : s[..max];
 }

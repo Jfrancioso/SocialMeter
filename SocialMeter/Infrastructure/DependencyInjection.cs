@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Infrastructure.Anthropic;
+using SocialMeter.Infrastructure.Bluesky;
 using SocialMeter.Infrastructure.Data;
 using SocialMeter.Infrastructure.Imdb;
 using SocialMeter.Infrastructure.Links;
@@ -31,6 +32,7 @@ public static class DependencyInjection
         services.Configure<RedditOptions>(configuration.GetSection(RedditOptions.SectionName));
         services.Configure<ArcticShiftOptions>(configuration.GetSection(ArcticShiftOptions.SectionName));
         services.Configure<XOptions>(configuration.GetSection(XOptions.SectionName));
+        services.Configure<BlueskyOptions>(configuration.GetSection(BlueskyOptions.SectionName));
         services.Configure<OmdbOptions>(configuration.GetSection(OmdbOptions.SectionName));
         services.Configure<AnthropicOptions>(configuration.GetSection(AnthropicOptions.SectionName));
         services.Configure<RatingsOptions>(configuration.GetSection(RatingsOptions.SectionName));
@@ -64,6 +66,9 @@ public static class DependencyInjection
         services.AddHttpClient<ArcticShiftSource>();
         services.AddHttpClient<XSource>();
         services.AddHttpClient<SteamReviewSource>();
+        services.AddHttpClient<BlueskySource>();
+        services.AddHttpClient(BlueskySession.HttpClientName);
+        services.AddSingleton<BlueskySession>(); // one signed-in session per process; Bluesky caps sign-ins
 
         // Reddit: the official API in every environment. In Development only, ArcticShift:Enabled swaps in the archive for
         // local evaluation while the official application is pending; it can never be switched on in production.
@@ -71,6 +76,7 @@ public static class DependencyInjection
         services.AddScoped<ISocialSource>(sp => useArchive ? sp.GetRequiredService<ArcticShiftSource>() : sp.GetRequiredService<RedditSource>());
         services.AddScoped<ISocialSource>(sp => sp.GetRequiredService<XSource>());
         services.AddScoped<ISocialSource>(sp => sp.GetRequiredService<SteamReviewSource>());
+        services.AddScoped<ISocialSource>(sp => sp.GetRequiredService<BlueskySource>());
 
         // ---- Post assessment ----
         // Claude reads posts in context (is it about this title? how does the author feel about *it*?) when an API key is
