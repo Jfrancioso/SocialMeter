@@ -19,7 +19,7 @@
 #>
 param(
   [Parameter(Mandatory)] [ValidatePattern('^[a-z0-9-]{3,30}$')] [string] $Prefix,
-  [string] $Location = "eastus2",
+  [string] $Location = "centralus",   # East US 2 refused new SQL servers for this subscription
   [string] $ApiRepo = "Jfrancioso/SocialMeter",
   [string] $UiRepo = "Jfrancioso/SocialMeter.Ui",
   [string] $SqlAdmin = "socialmeter_admin"
