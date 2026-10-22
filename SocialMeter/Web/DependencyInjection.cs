@@ -95,5 +95,5 @@ public static class DependencyInjection
         return app;
     }
 
-    private static string ClientKey(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    private static string ClientKey(HttpContext ctx) => ClientAddress.For(ctx);
 }

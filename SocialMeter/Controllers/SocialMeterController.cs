@@ -7,6 +7,7 @@ using SocialMeter.Application.Social;
 using SocialMeter.Contracts.Social;
 using SocialMeter.Domain.Models;
 using SocialMeter.Options;
+using SocialMeter.Web;
 using SocialMeter.Web.Filters;
 
 namespace SocialMeter.Controllers;
@@ -38,7 +39,7 @@ public sealed class SocialMeterController : ControllerBase
     [HttpGet("{type}/{id:int}")]
     public async Task<ActionResult<SocialMeterResponseDto>> Get([FromRoute] MediaType type, [FromRoute] int id, [FromQuery] bool refresh = false, CancellationToken ct = default)
     {
-        if (refresh && !_budget.TryAcquireForcedRefresh(HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"))
+        if (refresh && !_budget.TryAcquireForcedRefresh(ClientAddress.For(HttpContext)))
         {
             return StatusCode(StatusCodes.Status429TooManyRequests, new ProblemDetails
             {
