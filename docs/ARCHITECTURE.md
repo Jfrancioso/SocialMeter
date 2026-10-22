@@ -1,5 +1,7 @@
 # Architecture
 
+The product is Chatterbub; SocialMeter is the code name used in namespaces, class names and infrastructure.
+
 SocialMeter follows **Clean Architecture** in the shape the standard ASP.NET Core templates use (the layout popularised by
 Jason Taylor's template and Microsoft's own guidance): four layers with dependencies pointing inward, interfaces as the
 seam between the application and the outside world, and one class per use case. It is the same family as Onion and

@@ -6,6 +6,10 @@ name: Deploy API
 on:
   push:
     branches: [main]
+    # A restart costs ~30 s of API downtime; documentation changes never need one.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   workflow_dispatch:
 
 concurrency:

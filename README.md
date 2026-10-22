@@ -1,7 +1,11 @@
-# SocialMeter API
+# Chatterbub API
 
-The back end for [SocialMeter](https://github.com/Jfrancioso/SocialMeter.Ui): an audience sentiment meter for movies and
-TV shows, scored from public conversation on Reddit and X and shown beside TMDB, IMDb, Rotten Tomatoes and Metacritic.
+The back end for [Chatterbub](https://chatterbub.com) ([front end](https://github.com/Jfrancioso/SocialMeter.Ui)): an audience
+sentiment score for movies, TV shows and games, scored from public conversation on Reddit, X and Steam and shown beside
+TMDB, IMDb, Rotten Tomatoes, Metacritic and Steam.
+
+SocialMeter is the project's code name: namespaces, repositories and Azure resources keep it; everything a visitor sees
+says Chatterbub.
 
 .NET 8 · EF Core 8 · SQL Server. Front end: Vue 3 (separate repo).
 

@@ -1,4 +1,4 @@
-# SocialMeter: a personal guide to how it works and why
+# Chatterbub (code name SocialMeter): a personal guide to how it works and why
 
 This is a reading guide, not a reference. Work through it in order, one section per sitting, with the files open beside
 it. Every section ends with "Say it back": questions to answer out loud, in your own words, without looking. If you
