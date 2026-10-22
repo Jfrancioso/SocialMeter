@@ -92,16 +92,6 @@ public static class DependencyInjection
 
         // The API is for the site, not for crawlers. Only polite bots honour this; the rate limits handle the rest.
         app.MapGet("/robots.txt", () => Results.Text("User-agent: *\nDisallow: /\n", "text/plain"));
-
-        // The bare host is not an endpoint; say so and point at the site, instead of a blank 404 that looks like an outage.
-        var site = app.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()?.FirstOrDefault() ?? "http://localhost:5173";
-        app.MapGet("/", () => Results.Json(new
-        {
-            name = "SocialMeter API",
-            site,
-            health = "/api/health",
-            endpoints = new[] { "/api/home", "/api/titles/search?query=", "/api/titles/{movie|tv|game}/{id}", "/api/socialmeter/{movie|tv|game}/{id}" }
-        }));
         return app;
     }
 
