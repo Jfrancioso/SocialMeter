@@ -79,8 +79,14 @@ at Azure, which stops being true behind Cloudflare's proxy. The Origin CA certif
 which is the only thing that should ever connect to the API by that name.
 
 Zone settings: SSL **Full (strict)**, Always Use HTTPS, minimum TLS 1.2, TLS 1.3, automatic HTTPS rewrites, HSTS
-six months (no subdomains, no preload), Bot Fight Mode with JavaScript detections, browser integrity check, security
-level medium. Cloudflare Web Analytics is injected and allowed by the site's CSP.
+six months (no subdomains, no preload), browser integrity check, security level medium. Cloudflare Web Analytics is
+injected and allowed by the site's CSP.
+
+**Bot Fight Mode is deliberately off.** On the free plan it forces JavaScript detections, which inject an inline
+script whose content changes per request, so it can only run if the site's CSP allows `'unsafe-inline'` scripts. The
+strict CSP is the stronger protection, and with JS detections blocked Cloudflare would score real visitors as bots.
+API scraping is handled by the API's own per-visitor limits and, once the token has Zone WAF permission, a Cloudflare
+rate-limiting rule on api.chatterbub.com.
 
 The API reads the visitor's address from `CF-Connecting-IP` only when the connection comes from Cloudflare's published
 ranges (`Web/ClientAddress.cs`); otherwise per-visitor limits would be shared by everyone at one Cloudflare location.
