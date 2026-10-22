@@ -36,18 +36,23 @@ public sealed class HomeController : ControllerBase
         var nowPlayingTask = _titles.GetNowPlayingAsync(region, 1, ct);
         var onTheAirTask = _titles.GetOnTheAirAsync(1, ct);
         var seasonalTask = _tracker.GetSeasonalRowAsync(ct);
+        var seasonalTopTask = _tracker.GetSeasonalTopRowsAsync(region, ct);
         var popularMoviesTask = _titles.GetPopularAsync(MediaType.Movie, 1, ct);
         var popularTvTask = _titles.GetPopularAsync(MediaType.Tv, 1, ct);
         var topGamesTask = SafeAsync(_titles.GetTrendingAsync(MediaType.Game, 1, ct));
         var mostPlayedTask = SafeAsync(_titles.GetPopularAsync(MediaType.Game, 1, ct));
 
-        await Task.WhenAll(trendingTask, nowPlayingTask, onTheAirTask, seasonalTask, popularMoviesTask, popularTvTask, topGamesTask, mostPlayedTask);
+        await Task.WhenAll(trendingTask, nowPlayingTask, onTheAirTask, seasonalTask, seasonalTopTask, popularMoviesTask, popularTvTask, topGamesTask, mostPlayedTask);
 
         var trending = trendingTask.Result;
         var (seasonLabel, seasonSubtitle, seasonItems) = seasonalTask.Result;
         var featured = trending.Items.FirstOrDefault(t => t.BackdropPath.Length > 0) ?? trending.Items.FirstOrDefault();
 
-        var rows = new List<HomeRowDto>
+        // Seasonal top rows (October's horror pair) come before everything else; the rest of the page keeps its order.
+        var rows = seasonalTopTask.Result
+            .Select(r => new HomeRowDto { Key = r.Key, Title = r.Title, Subtitle = r.Subtitle, Items = r.Items })
+            .ToList();
+        rows.AddRange(new List<HomeRowDto>
         {
             new() { Key = "trending", Title = "Trending now", Subtitle = "What the internet is talking about today", Items = trending.Items },
             new() { Key = "now_playing", Title = "In theaters", Subtitle = "Playing near you", Items = nowPlayingTask.Result.Items },
@@ -57,7 +62,7 @@ public sealed class HomeController : ControllerBase
             new() { Key = "popular_movies", Title = "Popular movies", Items = popularMoviesTask.Result.Items },
             new() { Key = "popular_tv", Title = "Popular shows", Items = popularTvTask.Result.Items },
             new() { Key = "most_played", Title = "Most played right now", Subtitle = "Steam's live player counts", Items = mostPlayedTask.Result }
-        };
+        });
 
         await _tracker.AnnotateAsync(rows.SelectMany(r => r.Items).Concat(featured is null ? [] : [featured]), ct);
 

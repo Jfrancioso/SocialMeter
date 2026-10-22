@@ -51,6 +51,24 @@ public sealed class TmdbClient
     public Task<PagedResult<Title>> DiscoverByGenreAsync(MediaType mediaType, int genreId, int page, CancellationToken ct)
         => GetListAsync($"discover/{Segment(mediaType)}?with_genres={genreId}&sort_by=popularity.desc&include_adult=false&vote_count.gte=50", mediaType, page, ct);
 
+    /// <summary>Movies in a genre released in the last <paramref name="days"/> days, most popular first: "what's hot in horror right now".</summary>
+    public Task<PagedResult<Title>> DiscoverRecentMoviesByGenreAsync(int genreId, int days, int page, CancellationToken ct)
+    {
+        var from = DateTime.UtcNow.AddDays(-days).ToString("yyyy-MM-dd");
+        var to = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        return GetListAsync($"discover/movie?with_genres={genreId}&primary_release_date.gte={from}&primary_release_date.lte={to}&sort_by=popularity.desc&include_adult=false&vote_count.gte=10", MediaType.Movie, page, ct);
+    }
+
+    /// <summary>Movies in a genre with a theatrical release in the region in the last <paramref name="days"/> days: "new in theaters".</summary>
+    public Task<PagedResult<Title>> DiscoverInTheatersByGenreAsync(int genreId, string region, int days, int page, CancellationToken ct)
+    {
+        var from = DateTime.UtcNow.AddDays(-days).ToString("yyyy-MM-dd");
+        var to = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        var r = Uri.EscapeDataString(NormalizeRegion(region));
+        // Release types 2 and 3 are limited and wide theatrical; the pipe means "either".
+        return GetListAsync($"discover/movie?with_genres={genreId}&region={r}&with_release_type=2|3&release_date.gte={from}&release_date.lte={to}&sort_by=popularity.desc&include_adult=false", MediaType.Movie, page, ct);
+    }
+
     public Task<PagedResult<Title>> SearchAsync(string query, MediaType? mediaType, int page, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(query))

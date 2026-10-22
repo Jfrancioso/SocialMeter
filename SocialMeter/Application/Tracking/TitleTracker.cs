@@ -64,6 +64,40 @@ public sealed class TitleTracker : ITitleTracker
         return (theme.Label, theme.Subtitle, items);
     }
 
+    public async Task<IReadOnlyList<SeasonalRow>> GetSeasonalTopRowsAsync(string region, CancellationToken ct = default)
+    {
+        var theme = SeasonalTheme.For(DateTime.UtcNow);
+        if (theme.Key != "halloween")
+            return Array.Empty<SeasonalRow>();
+
+        // Horror in October gets the top of the page: what is hot right now, and what is actually in theaters.
+        // Each list fails independently so one bad TMDB call never blanks the other.
+        var rows = new List<SeasonalRow>();
+        try
+        {
+            var trending = await _titles.DiscoverRecentMoviesByGenreAsync(theme.MovieGenreId, days: 365, page: 1, ct);
+            if (trending.Items.Count > 0)
+                rows.Add(new SeasonalRow("horror_trending", "Horror trending now", "The scariest things people are talking about this season", trending.Items.Take(20).ToList()));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Horror trending row failed");
+        }
+
+        try
+        {
+            var theaters = await _titles.DiscoverInTheatersByGenreAsync(theme.MovieGenreId, region, days: 45, page: 1, ct);
+            if (theaters.Items.Count > 0)
+                rows.Add(new SeasonalRow("horror_theaters", "New horror in theaters", "Opened in the last six weeks", theaters.Items.Take(20).ToList()));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Horror in theaters row failed");
+        }
+
+        return rows;
+    }
+
     public async Task<TrackedRefreshResult> RefreshAsync(CancellationToken ct = default)
     {
         await RefreshLock.WaitAsync(ct);
@@ -92,6 +126,12 @@ public sealed class TitleTracker : ITitleTracker
             await CollectAsync(seen, "Trending", p => _titles.GetTrendingAsync(null, p, ct), ct);
             await CollectAsync(seen, theme.Label, p => _titles.DiscoverByGenreAsync(MediaType.Movie, theme.MovieGenreId, p, ct), ct);
             await CollectAsync(seen, theme.Label, p => _titles.DiscoverByGenreAsync(MediaType.Tv, theme.TvGenreId, p, ct), ct);
+            if (theme.Key == "halloween")
+            {
+                // The two horror rows at the top of the October home page should carry readings, not padlocks.
+                await CollectAsync(seen, "Horror season", p => _titles.DiscoverRecentMoviesByGenreAsync(theme.MovieGenreId, 365, p, ct), ct);
+                await CollectAsync(seen, "Horror season", p => _titles.DiscoverInTheatersByGenreAsync(theme.MovieGenreId, "US", 45, p, ct), ct);
+            }
             await CollectAsync(seen, "Popular", p => _titles.GetPopularAsync(MediaType.Movie, p, ct), ct);
             await CollectAsync(seen, "Popular", p => _titles.GetPopularAsync(MediaType.Tv, p, ct), ct);
 

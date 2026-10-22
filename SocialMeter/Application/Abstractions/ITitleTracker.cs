@@ -15,7 +15,16 @@ public interface ITitleTracker
 
     /// <summary>The current seasonal theme and the titles it pulls in (for the home page row).</summary>
     Task<(string Label, string Subtitle, IReadOnlyList<Title> Items)> GetSeasonalRowAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Extra rows some seasons put at the very top of the home page (October: horror trending now, new horror in theaters).
+    /// Empty in months that only have the mid-page seasonal row.
+    /// </summary>
+    Task<IReadOnlyList<SeasonalRow>> GetSeasonalTopRowsAsync(string region, CancellationToken ct = default);
 }
+
+/// <summary>A home-page row a season adds: a stable key for the UI, a heading, and the titles.</summary>
+public sealed record SeasonalRow(string Key, string Title, string Subtitle, IReadOnlyList<Title> Items);
 
 public sealed class TrackedRefreshResult
 {
