@@ -1,0 +1,14 @@
+# Weekly pull requests for NuGet packages and GitHub Actions versions. CI runs on each one, so a bad bump never merges unseen.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      nuget:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
