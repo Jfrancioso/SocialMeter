@@ -37,11 +37,13 @@ $sqlDb  = "SocialMeterDb"
 $swa    = "$Prefix-ui"
 
 function Invoke-Az {
-  # Runs az and stops the script with the command's own message when it fails.
+  # Runs az and stops the script with the command's own message when it fails. Returns stdout only, as one string:
+  # az writes warnings to stderr even on success, and those arrive here as ErrorRecords that must not pollute values.
   param([Parameter(ValueFromRemainingArguments)] [string[]] $Args)
-  $output = & az @Args 2>&1
-  if ($LASTEXITCODE -ne 0) { throw "az $($Args[0..1] -join ' ') failed:`n$output" }
-  return $output
+  $raw = & az @Args 2>&1
+  $stdout = ($raw | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] }) -join "`n"
+  if ($LASTEXITCODE -ne 0) { throw "az $($Args[0..1] -join ' ') failed:`n$($raw -join "`n")" }
+  return $stdout
 }
 
 function Test-Az {
@@ -120,8 +122,8 @@ Invoke-Az webapp config appsettings set --name $webapp --resource-group $rg --se
 
 # ---- GitHub: the deploy workflows read these ----
 Write-Host "==> GitHub secrets and variables"
-$profile = Invoke-Az webapp deployment list-publishing-profiles --name $webapp --resource-group $rg --xml
-($profile -join "`n") | gh secret set AZURE_WEBAPP_PUBLISH_PROFILE --repo $ApiRepo
+$publishProfile = Invoke-Az webapp deployment list-publishing-profiles --name $webapp --resource-group $rg --xml
+$publishProfile | gh secret set AZURE_WEBAPP_PUBLISH_PROFILE --repo $ApiRepo
 gh variable set AZURE_WEBAPP_NAME --repo $ApiRepo --body $webapp
 
 $swaToken = (Invoke-Az staticwebapp secrets list --name $swa --resource-group $rg --query properties.apiKey --output tsv).Trim()
