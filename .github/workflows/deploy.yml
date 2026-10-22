@@ -1,0 +1,55 @@
+# Continuous deployment: a push to main that passes CI is published to the Azure App Service named in the
+# AZURE_WEBAPP_NAME repository variable, using the publish profile stored as a secret. Until that variable is set
+# (see docs/DEPLOY.md and infra/azure-provision.ps1) this workflow does nothing, so CI alone is safe to merge.
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test SocialMeter.sln --configuration Release --filter "Category!=Eval"
+
+  deploy:
+    needs: test
+    if: vars.AZURE_WEBAPP_NAME != ''
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish
+        run: dotnet publish SocialMeter/SocialMeter.csproj --configuration Release --output publish
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: publish
+
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/health")
+            [ "$code" = "200" ] && echo "healthy" && exit 0
+            sleep 15
+          done
+          echo "health check never returned 200" && exit 1
