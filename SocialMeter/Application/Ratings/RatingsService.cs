@@ -87,6 +87,8 @@ public sealed class RatingsService : IRatingsService
         var mcUrl = mcTask.Result;
 
         // IMDb: IMDb's own daily file first (it has new releases days or weeks before OMDb does), then OMDb.
+        // Whether the file was loaded is read here, at lookup time: it can finish loading while the pages below are read.
+        var imdbLoading = !_imdb.IsLoaded && title.ImdbId is not null;
         if (_imdb.TryGet(title.ImdbId, out var imdbRating, out var imdbVotes))
             ratings.Add(Build("imdb", "IMDb", imdbRating.ToString("0.0", CultureInfo.InvariantCulture), (int)Math.Round(imdbRating * 10),
                 $"{imdbVotes:N0} votes", imdbUrl, "/10"));
@@ -111,7 +113,6 @@ public sealed class RatingsService : IRatingsService
 
         // A failed lookup (key not yet active, daily quota hit), or IMDb's file still loading after a restart, is retried
         // soon rather than frozen for the full window.
-        var imdbLoading = _imdb.Count == 0 && title.ImdbId is not null;
         _cache.Set(key, (IReadOnlyList<ExternalRating>)ratings, omdbFailed || imdbLoading ? RetryFailedAfter : CacheFor);
         return ratings;
     }
