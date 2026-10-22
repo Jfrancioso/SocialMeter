@@ -62,3 +62,32 @@ on `main` and let the workflow deploy it.
 - A staging deployment slot on the App Service (needs the Standard tier) with swap-on-success in the workflow.
 - Migrations run from the workflow instead of at startup, with a least-privilege SQL login for the app.
 - Application Insights for request and dependency telemetry (one line in `AddWeb`).
+
+## Domain and Cloudflare (live since 2026-10-22)
+
+The public site is **https://chatterbub.com**; the API is **https://api.chatterbub.com**. Both are proxied by
+Cloudflare (zone chatterbub.com, registered through Cloudflare Registrar).
+
+| Host | Cloudflare | Origin | Certificate at the origin |
+|---|---|---|---|
+| chatterbub.com | proxied | Static Web App `socialmeter-jf-ui` | Azure-managed, validated by the apex TXT record (keep it) |
+| www.chatterbub.com | proxied, 301 to chatterbub.com at the edge (path and query kept) | never reached | n/a |
+| api.chatterbub.com | proxied | App Service `socialmeter-jf-api` | Cloudflare Origin CA, valid to 2041, stored in Key Vault as `chatterbub-origin` |
+
+Why the origin certificate: Azure's free App Service certificate renews by checking that the hostname points straight
+at Azure, which stops being true behind Cloudflare's proxy. The Origin CA certificate is trusted only by Cloudflare,
+which is the only thing that should ever connect to the API by that name.
+
+Zone settings: SSL **Full (strict)**, Always Use HTTPS, minimum TLS 1.2, TLS 1.3, automatic HTTPS rewrites, HSTS
+six months (no subdomains, no preload), Bot Fight Mode with JavaScript detections, browser integrity check, security
+level medium. Cloudflare Web Analytics is injected and allowed by the site's CSP.
+
+The API reads the visitor's address from `CF-Connecting-IP` only when the connection comes from Cloudflare's published
+ranges (`Web/ClientAddress.cs`); otherwise per-visitor limits would be shared by everyone at one Cloudflare location.
+Update that list if Cloudflare changes https://www.cloudflare.com/ips-v4 or ips-v6.
+
+The Cloudflare API token lives in Key Vault (`cloudflare-api-token`), scoped to this zone. A rate-limiting rule needs
+the token's **Zone WAF: Edit** permission, not yet granted; the API's own per-visitor limits apply meanwhile.
+
+Still direct-reachable: `socialmeter-jf-api.azurewebsites.net` bypasses Cloudflare (app limits still apply). Locking the
+App Service to Cloudflare's ranges closes that, once the deploy smoke test no longer depends on the Azure hostname.
