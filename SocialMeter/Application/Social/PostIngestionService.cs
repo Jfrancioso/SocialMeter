@@ -30,50 +30,70 @@ public sealed class PostIngestionService
 
     public string AssessorName => _assessor.Name;
 
-    /// <summary>Pulls one source for one title and persists the result. Never throws for a source failure: the status says what happened.</summary>
-    public async Task<SourceStatusDto> IngestAsync(ISocialSource source, Title title, DateTime now, CancellationToken ct)
+    /// <summary>
+    /// Pulls every source for one title and persists the result, as fast as the slowest step rather than the sum of them:
+    /// the sources are fetched at the same time (fetching never touches the database), then all new posts from all
+    /// sources go to the assessor together, whose batches run concurrently, and everything is saved once. The posts read
+    /// and the batch size are the same as pulling one source at a time, so the cost is too (or a little lower, when
+    /// partial batches combine). Never throws for a source failure: each status says what happened.
+    /// </summary>
+    public async Task<List<SourceStatusDto>> IngestAllAsync(IEnumerable<ISocialSource> sources, Title title, DateTime now, CancellationToken ct)
     {
-        if (!source.IsConfigured)
-            return new SourceStatusDto { Platform = source.Platform, Configured = false };
+        var list = sources.ToList();
+        var fetches = await Task.WhenAll(list.Select(s => FetchAsync(s, title, ct)));
 
-        IReadOnlyList<SocialPostCandidate> candidates;
-        try
-        {
-            candidates = await source.FetchAsync(title, ct);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogWarning(ex, "{Platform} fetch failed for {Title}", source.Platform, title.Name);
-            return new SourceStatusDto { Platform = source.Platform, Configured = true, Fetched = 0, Error = ex.Message };
-        }
-
-        if (candidates.Count == 0)
-            return new SourceStatusDto { Platform = source.Platform, Configured = true, Fetched = 0 };
-
-        var externalIds = candidates.Select(c => c.ExternalId).ToList();
-        var existing = await _db.SocialPosts
-            .Where(p => p.Platform == source.Platform && externalIds.Contains(p.ExternalId))
-            .ToDictionaryAsync(p => p.ExternalId, ct);
-
+        // The DbContext is not thread-safe, so the upserts run one source at a time; they are quick database work.
         var toAssess = new List<SocialPost>();
-        foreach (var c in candidates)
+        foreach (var (source, candidates, _) in fetches)
         {
-            if (existing.TryGetValue(c.ExternalId, out var post))
-            {
-                if (UpdateExisting(post, c, now)) toAssess.Add(post);
-                continue;
-            }
+            if (candidates is not { Count: > 0 }) continue;
 
-            var fresh = NewPost(title, c, now);
-            _db.SocialPosts.Add(fresh);
-            toAssess.Add(fresh);
+            var externalIds = candidates.Select(c => c.ExternalId).ToList();
+            var existing = await _db.SocialPosts
+                .Where(p => p.Platform == source.Platform && externalIds.Contains(p.ExternalId))
+                .ToDictionaryAsync(p => p.ExternalId, ct);
+
+            foreach (var c in candidates)
+            {
+                if (existing.TryGetValue(c.ExternalId, out var post))
+                {
+                    if (UpdateExisting(post, c, now)) toAssess.Add(post);
+                    continue;
+                }
+
+                var fresh = NewPost(title, c, now);
+                _db.SocialPosts.Add(fresh);
+                toAssess.Add(fresh);
+            }
         }
 
         if (toAssess.Count > 0)
             await AssessAndApplyAsync(title, toAssess, now, ct);
 
         await _db.SaveChangesAsync(ct);
-        return new SourceStatusDto { Platform = source.Platform, Configured = true, Fetched = candidates.Count };
+        return fetches.Select(f => f.Status).ToList();
+    }
+
+    /// <summary>Pulls one source for one title and persists the result.</summary>
+    public async Task<SourceStatusDto> IngestAsync(ISocialSource source, Title title, DateTime now, CancellationToken ct)
+        => (await IngestAllAsync(new[] { source }, title, now, ct))[0];
+
+    private async Task<(ISocialSource Source, IReadOnlyList<SocialPostCandidate>? Candidates, SourceStatusDto Status)> FetchAsync(
+        ISocialSource source, Title title, CancellationToken ct)
+    {
+        if (!source.IsConfigured)
+            return (source, null, new SourceStatusDto { Platform = source.Platform, Configured = false });
+
+        try
+        {
+            var candidates = await source.FetchAsync(title, ct);
+            return (source, candidates, new SourceStatusDto { Platform = source.Platform, Configured = true, Fetched = candidates.Count });
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "{Platform} fetch failed for {Title}", source.Platform, title.Name);
+            return (source, null, new SourceStatusDto { Platform = source.Platform, Configured = true, Fetched = 0, Error = ex.Message });
+        }
     }
 
     /// <summary>Posts with an explicit platform verdict are scored by it; everything else goes to the configured assessor.</summary>

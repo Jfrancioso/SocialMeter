@@ -121,9 +121,7 @@ public sealed class SocialMeterService : ISocialMeterService
             return (false, Idle("Live reads paused: hourly budget reached"), PullPolicy.OutcomeName(decision, budgetRefused: true));
         }
 
-        var status = new List<SourceStatusDto>();
-        foreach (var source in _sources)
-            status.Add(await _ingestion.IngestAsync(source, title, now, ct));
+        var status = await _ingestion.IngestAllAsync(_sources, title, now, ct);
         return (true, status, PullPolicy.OutcomeName(decision, budgetRefused: false));
     }
 

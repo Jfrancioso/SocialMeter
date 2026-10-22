@@ -13,6 +13,12 @@ public sealed class AnthropicOptions
     /// <summary>Posts per request. Larger batches cost less per post but risk one bad post derailing the whole answer.</summary>
     public int BatchSize { get; set; } = 20;
 
+    /// <summary>
+    /// How many batches Claude reads at the same time during one pull. Changes how long a refresh takes, not what it
+    /// costs: the same batches are sent either way.
+    /// </summary>
+    public int MaxParallelBatches { get; set; } = 4;
+
     /// <summary>Characters of each post sent to the model.</summary>
     public int MaxPostChars { get; set; } = 700;
 

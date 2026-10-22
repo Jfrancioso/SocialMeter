@@ -107,28 +107,21 @@ public sealed class ClaudePostAssessor : IPostAssessor
 
     public async Task<IReadOnlyList<PostAssessment>> AssessAsync(Title title, IReadOnlyList<SocialPostCandidate> posts, CancellationToken ct = default)
     {
-        var results = new PostAssessment[posts.Count];
-        var batchSize = Math.Clamp(_options.BatchSize, 1, 50);
-
-        for (var start = 0; start < posts.Count; start += batchSize)
-        {
-            var batch = posts.Skip(start).Take(batchSize).ToList();
-            IReadOnlyList<PostAssessment> assessed;
-            try
+        // Batches are independent requests, so a few run at the same time to stay well inside the API's rate limits.
+        // Same batches, same tokens, same cost; the reader waits for the slowest batch instead of all of them in turn.
+        return await ParallelBatches.RunAsync(posts, Math.Clamp(_options.BatchSize, 1, 50), Math.Clamp(_options.MaxParallelBatches, 1, 8),
+            async batch =>
             {
-                assessed = await AssessBatchAsync(title, batch, ct);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogWarning(ex, "Claude assessment failed for {Count} posts about {Title}; using the lexicon for this batch", batch.Count, title.Name);
-                assessed = await _fallback.Inner.AssessAsync(title, batch, ct);
-            }
-
-            for (var i = 0; i < batch.Count; i++)
-                results[start + i] = assessed[i];
-        }
-
-        return results;
+                try
+                {
+                    return await AssessBatchAsync(title, batch, ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex, "Claude assessment failed for {Count} posts about {Title}; using the lexicon for this batch", batch.Count, title.Name);
+                    return await _fallback.Inner.AssessAsync(title, batch, ct);
+                }
+            }, ct);
     }
 
     private async Task<IReadOnlyList<PostAssessment>> AssessBatchAsync(Title title, IReadOnlyList<SocialPostCandidate> batch, CancellationToken ct)
