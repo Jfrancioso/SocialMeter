@@ -25,7 +25,7 @@ public sealed partial class RatingLinkResolver
         _logger = logger;
         _http.Timeout = TimeSpan.FromSeconds(6);
         _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SocialMeter/1.0 (+link verification only)");
+            "Mozilla/5.0 (compatible; Chatterbub/1.0; +https://chatterbub.com)");
     }
 
     public Task<string> RottenTomatoesAsync(Title title, CancellationToken ct)

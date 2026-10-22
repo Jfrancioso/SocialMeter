@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Infrastructure.Anthropic;
 using SocialMeter.Infrastructure.Data;
+using SocialMeter.Infrastructure.Imdb;
 using SocialMeter.Infrastructure.Links;
 using SocialMeter.Infrastructure.Omdb;
 using SocialMeter.Infrastructure.Reddit;
@@ -32,6 +33,7 @@ public static class DependencyInjection
         services.Configure<XOptions>(configuration.GetSection(XOptions.SectionName));
         services.Configure<OmdbOptions>(configuration.GetSection(OmdbOptions.SectionName));
         services.Configure<AnthropicOptions>(configuration.GetSection(AnthropicOptions.SectionName));
+        services.Configure<RatingsOptions>(configuration.GetSection(RatingsOptions.SectionName));
 
         // ---- Persistence ----
         services.AddDbContext<SocialMeterDbContext>(options =>
@@ -50,6 +52,12 @@ public static class DependencyInjection
         services.AddHttpClient<OmdbClient>();
         services.AddHttpClient<SteamClient>();
         services.AddHttpClient<RatingLinkResolver>();
+        services.AddHttpClient<PublishedScoreReader>();
+
+        // IMDb's daily ratings file, held in memory and refreshed once a day; fills in new releases OMDb hasn't caught up with.
+        services.AddSingleton<ImdbRatingsDataset>();
+        services.AddHttpClient(nameof(ImdbRatingsWorker));
+        services.AddHostedService<ImdbRatingsWorker>();
 
         // ---- Social sources: resolved as a set; add a platform by registering another ISocialSource ----
         services.AddHttpClient<RedditSource>();

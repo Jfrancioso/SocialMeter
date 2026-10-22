@@ -4,6 +4,7 @@ using Microsoft.Extensions.Caching.Memory;
 using SocialMeter.Infrastructure.Data;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Domain.Models;
+using SocialMeter.Infrastructure.Imdb;
 using SocialMeter.Infrastructure.Links;
 using SocialMeter.Infrastructure.Omdb;
 
@@ -16,14 +17,19 @@ public sealed class RatingsService : IRatingsService
 
     private readonly OmdbClient _omdb;
     private readonly RatingLinkResolver _links;
+    private readonly ImdbRatingsDataset _imdb;
+    private readonly PublishedScoreReader _published;
     private readonly SocialMeterDbContext _db;
     private readonly IMemoryCache _cache;
     private readonly ILogger<RatingsService> _logger;
 
-    public RatingsService(OmdbClient omdb, RatingLinkResolver links, SocialMeterDbContext db, IMemoryCache cache, ILogger<RatingsService> logger)
+    public RatingsService(OmdbClient omdb, RatingLinkResolver links, ImdbRatingsDataset imdb, PublishedScoreReader published,
+        SocialMeterDbContext db, IMemoryCache cache, ILogger<RatingsService> logger)
     {
         _omdb = omdb;
         _links = links;
+        _imdb = imdb;
+        _published = published;
         _db = db;
         _cache = cache;
         _logger = logger;
@@ -80,16 +86,33 @@ public sealed class RatingsService : IRatingsService
         var rtUrl = rtTask.Result;
         var mcUrl = mcTask.Result;
 
-        ratings.Add(Build("imdb", "IMDb", omdb?.ImdbRating, ParseOutOfTen(omdb?.ImdbRating),
-            omdb?.ImdbVotes is { } v && v != "N/A" ? $"{v} votes" : null, imdbUrl, "/10"));
-        ratings.Add(Build("rottenTomatoes", "Rotten Tomatoes", rt, ParsePercent(rt), "Tomatometer", rtUrl, ""));
-        ratings.Add(Build("metacritic", "Metacritic", omdb?.Metascore, ParseInt(omdb?.Metascore), "Metascore", mcUrl, "/100"));
+        // IMDb: IMDb's own daily file first (it has new releases days or weeks before OMDb does), then OMDb.
+        if (_imdb.TryGet(title.ImdbId, out var imdbRating, out var imdbVotes))
+            ratings.Add(Build("imdb", "IMDb", imdbRating.ToString("0.0", CultureInfo.InvariantCulture), (int)Math.Round(imdbRating * 10),
+                $"{imdbVotes:N0} votes", imdbUrl, "/10"));
+        else
+            ratings.Add(Build("imdb", "IMDb", omdb?.ImdbRating, ParseOutOfTen(omdb?.ImdbRating),
+                omdb?.ImdbVotes is { } v && v != "N/A" ? $"{v} votes" : null, imdbUrl, "/10"));
+
+        // Rotten Tomatoes and Metacritic: OMDb when it has them, otherwise the score the site publishes on the title's page.
+        // Only the critics' score counts; Rotten Tomatoes series pages carry only an audience score and stay "Not available".
+        if (ParsePercent(rt) is null && await _published.ReadAsync(rtUrl, "Tomatometer", title.Year, ct) is { } rtPage)
+            ratings.Add(Build("rottenTomatoes", "Rotten Tomatoes", $"{rtPage.Value}%", rtPage.Value, Reviews("Tomatometer", rtPage.Count, "reviews"), rtUrl, ""));
+        else
+            ratings.Add(Build("rottenTomatoes", "Rotten Tomatoes", rt, ParsePercent(rt), "Tomatometer", rtUrl, ""));
+
+        if (ParseInt(omdb?.Metascore) is null && await _published.ReadAsync(mcUrl, "Metascore", title.Year, ct) is { } mcPage)
+            ratings.Add(Build("metacritic", "Metacritic", mcPage.Value.ToString(CultureInfo.InvariantCulture), mcPage.Value, Reviews("Metascore", mcPage.Count, "critics"), mcUrl, "/100"));
+        else
+            ratings.Add(Build("metacritic", "Metacritic", omdb?.Metascore, ParseInt(omdb?.Metascore), "Metascore", mcUrl, "/100"));
 
         if (!_omdb.IsConfigured)
             _logger.LogDebug("OMDb not configured; IMDb/RT/Metacritic ratings unavailable.");
 
-        // A failed lookup (key not yet active, daily quota hit) is retried soon rather than frozen for the full window.
-        _cache.Set(key, (IReadOnlyList<ExternalRating>)ratings, omdbFailed ? RetryFailedAfter : CacheFor);
+        // A failed lookup (key not yet active, daily quota hit), or IMDb's file still loading after a restart, is retried
+        // soon rather than frozen for the full window.
+        var imdbLoading = _imdb.Count == 0 && title.ImdbId is not null;
+        _cache.Set(key, (IReadOnlyList<ExternalRating>)ratings, omdbFailed || imdbLoading ? RetryFailedAfter : CacheFor);
         return ratings;
     }
 
@@ -158,6 +181,9 @@ public sealed class RatingsService : IRatingsService
             Url = url
         };
     }
+
+    private static string Reviews(string label, int? count, string noun)
+        => count is > 0 ? $"{label} · {count:N0} {noun}" : label;
 
     private static int? ParseOutOfTen(string? s)
         => double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? (int)Math.Round(d * 10) : null;
