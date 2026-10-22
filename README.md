@@ -38,8 +38,15 @@ dotnet user-secrets set "Reddit:ClientSecret" "<script app secret>"        # opt
 dotnet user-secrets set "X:BearerToken"      "<X API v2 bearer token>"     # optional
 dotnet user-secrets set "Omdb:ApiKey"        "<omdbapi.com key>"           # optional, unlocks IMDb/RT/Metacritic
 dotnet user-secrets set "Anthropic:ApiKey"   "<console.anthropic.com key>" # optional, context-aware sentiment
+dotnet user-secrets set "Admin:ApiKey"       "<long random string>"       # enables the operator endpoints (sent as X-Admin-Key)
 dotnet run --launch-profile https
 ```
+
+Prefer `Tmdb:ReadAccessToken` (the v4 token) over `Tmdb:ApiKey`: it travels in a header, never in a URL.
+
+Operator endpoints (`rescore`, `sync-deletions`, `tracked/refresh`) require the `X-Admin-Key` header and are disabled until
+`Admin:ApiKey` is set. Every client is limited to 120 requests a minute; forced refreshes are limited per client and the
+process has an hourly ceiling on live pulls (`SocialMeter:MaxLivePullsPerHour`), beyond which cached readings are served.
 
 Migrations apply on start-up (connection string in `appsettings.json`). Without social credentials the meter only
 shows the seeded demo posts for *Dune: Part Two* and *Gladiator II*. Swagger is at `/swagger`; `SocialMeter.http`

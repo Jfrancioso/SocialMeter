@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
@@ -24,7 +25,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services
     .AddOptions<TmdbOptions>()
     .Bind(builder.Configuration.GetSection(TmdbOptions.SectionName))
-    .Validate(o => !string.IsNullOrWhiteSpace(o.ApiKey), "Tmdb:ApiKey is required.")
+    .Validate(o => o.IsConfigured, "Tmdb:ReadAccessToken or Tmdb:ApiKey is required.")
     .Validate(o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _), "Tmdb:BaseUrl must be a valid absolute URL.")
     .ValidateOnStart();
 
@@ -33,12 +34,15 @@ builder.Services.Configure<XOptions>(builder.Configuration.GetSection(XOptions.S
 builder.Services.Configure<OmdbOptions>(builder.Configuration.GetSection(OmdbOptions.SectionName));
 builder.Services.Configure<SocialMeterOptions>(builder.Configuration.GetSection(SocialMeterOptions.SectionName));
 builder.Services.Configure<AnthropicOptions>(builder.Configuration.GetSection(AnthropicOptions.SectionName));
+builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
 
 // ---- External clients ----
 builder.Services.AddHttpClient<TmdbClient>((sp, http) =>
 {
     var opts = sp.GetRequiredService<IOptions<TmdbOptions>>().Value;
     http.BaseAddress = new Uri(opts.BaseUrl.EndsWith('/') ? opts.BaseUrl : opts.BaseUrl + "/");
+    if (opts.UseBearer)
+        http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", opts.ReadAccessToken);
 });
 builder.Services.AddHttpClient<OmdbClient>();
 builder.Services.AddHttpClient<SteamClient>();
@@ -75,6 +79,7 @@ builder.Services.AddSingleton<IPostAssessor>(sp =>
         ? ActivatorUtilities.CreateInstance<ClaudePostAssessor>(sp)
         : sp.GetRequiredService<LexiconPostAssessorFallback>().Inner);
 builder.Services.AddScoped<ScoreHistoryService>();
+builder.Services.AddSingleton<LivePullBudget>();
 builder.Services.AddScoped<DeletionSyncService>();
 builder.Services.AddHostedService<DeletionSyncWorker>();
 
@@ -97,6 +102,17 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddProblemDetails();
 
+// Per-client ceiling on every API call, so id enumeration cannot burn the TMDB/OMDb quotas or the Anthropic bill.
+// Live-pull budgets are separate (LivePullBudget); this is the plain request-rate guard.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new SlidingWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 4, QueueLimit = 0 }));
+});
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowVueFrontend", policy =>
@@ -118,6 +134,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors("AllowVueFrontend");
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Contracts.Titles;
 using SocialMeter.Domain.Models;
+using SocialMeter.Web.Filters;
 
 namespace SocialMeter.Controllers;
 
@@ -68,8 +69,9 @@ public sealed class TitlesController : ControllerBase
         return Ok(title);
     }
 
-    /// <summary>The titles SocialMeter is measuring right now and why. Rebuild with POST.</summary>
+    /// <summary>Rebuilds the tracked set now. Operator endpoint: needs the X-Admin-Key header.</summary>
     [HttpPost("tracked/refresh")]
+    [RequireAdminKey]
     public async Task<ActionResult<TrackedRefreshResult>> RefreshTracked(CancellationToken ct)
         => Ok(await _tracker.RefreshAsync(ct));
 

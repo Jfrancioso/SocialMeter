@@ -33,7 +33,25 @@ public sealed class DeletionSyncService
         _logger = logger;
     }
 
+    // The worker and the operator endpoint must never run at once: both would load the same due rows and the second
+    // SaveChanges would fail on rows the first already removed.
+    private static readonly SemaphoreSlim RunLock = new(1, 1);
+
     public async Task<DeletionSyncResult> RunAsync(CancellationToken ct = default)
+    {
+        if (!await RunLock.WaitAsync(0, ct))
+            throw new Common.OperationInProgressException("Deletion sync");
+        try
+        {
+            return await RunCoreAsync(ct);
+        }
+        finally
+        {
+            RunLock.Release();
+        }
+    }
+
+    private async Task<DeletionSyncResult> RunCoreAsync(CancellationToken ct)
     {
         var now = DateTime.UtcNow;
         var result = new DeletionSyncResult { StartedAt = now };

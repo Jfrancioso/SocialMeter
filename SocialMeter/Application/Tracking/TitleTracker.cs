@@ -70,6 +70,18 @@ public sealed class TitleTracker : ITitleTracker
         try
         {
             var now = DateTime.UtcNow;
+
+            // A rebuild is a few dozen TMDB and Steam list calls; repeating it within minutes only invites Steam's IP throttle.
+            var last = _cache.Get<DateTime?>(RefreshedKey);
+            if (last is { } recent && now - recent < TimeSpan.FromMinutes(Math.Max(0, _options.MinTrackedRefreshMinutes)))
+            {
+                return new TrackedRefreshResult
+                {
+                    RefreshedAt = recent,
+                    Tracked = await _db.TrackedTitles.CountAsync(ct),
+                    Theme = SeasonalTheme.For(now).Label
+                };
+            }
             var theme = SeasonalTheme.For(now);
             var seen = new Dictionary<(MediaType, int), string>();
 

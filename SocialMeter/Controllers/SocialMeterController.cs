@@ -1,8 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Common;
 using SocialMeter.Application.Social;
 using SocialMeter.Contracts.Social;
 using SocialMeter.Domain.Models;
+using SocialMeter.Options;
+using SocialMeter.Web.Filters;
 
 namespace SocialMeter.Controllers;
 
@@ -12,33 +16,58 @@ public sealed class SocialMeterController : ControllerBase
 {
     private readonly ISocialMeterService _socialMeter;
     private readonly DeletionSyncService _deletionSync;
+    private readonly LivePullBudget _budget;
+    private readonly SocialMeterOptions _options;
 
-    public SocialMeterController(ISocialMeterService socialMeter, DeletionSyncService deletionSync)
+    public SocialMeterController(ISocialMeterService socialMeter, DeletionSyncService deletionSync, LivePullBudget budget, IOptions<SocialMeterOptions> options)
     {
         _socialMeter = socialMeter;
         _deletionSync = deletionSync;
+        _budget = budget;
+        _options = options.Value;
     }
 
     /// <summary>
-    /// Runs the deletion sync now: stored posts are re-checked at their platform and any that were deleted or
-    /// removed there are purged, then affected scores are recomputed. The background worker does this on a schedule.
+    /// Runs the deletion sync now: stored posts are re-checked at their platform and any that were deleted or removed
+    /// there are purged, then affected scores are recomputed. Operator endpoint: needs the X-Admin-Key header.
     /// </summary>
     [HttpPost("sync-deletions")]
+    [RequireAdminKey]
     public async Task<ActionResult<DeletionSyncResult>> SyncDeletions(CancellationToken ct)
-        => Ok(await _deletionSync.RunAsync(ct));
+    {
+        try { return Ok(await _deletionSync.RunAsync(ct)); }
+        catch (OperationInProgressException ex) { return Conflict(new ProblemDetails { Status = 409, Title = ex.Message }); }
+    }
 
     /// <summary>
-    /// Re-assesses stored posts with the current assessor and trust rules; no social-source calls.
-    /// Posts the assessor has already read are skipped unless ?force=true (with Claude configured, force costs tokens).
+    /// Re-assesses stored posts with the current assessor and trust rules; no social-source calls. Posts the assessor has
+    /// already read are skipped unless ?force=true (with Claude configured, force costs tokens). Operator endpoint.
     /// </summary>
     [HttpPost("rescore")]
+    [RequireAdminKey]
     public async Task<ActionResult> Rescore([FromQuery] bool force = false, CancellationToken ct = default)
-        => Ok(new { rescored = await _socialMeter.RescoreAsync(force, ct) });
+    {
+        try { return Ok(new { rescored = await _socialMeter.RescoreAsync(force, ct) }); }
+        catch (OperationInProgressException ex) { return Conflict(new ProblemDetails { Status = 409, Title = ex.Message }); }
+    }
 
-    /// <summary>The SocialMeter reading for a title. Pass ?refresh=true to re-pull from the social sources now.</summary>
+    /// <summary>
+    /// The SocialMeter reading for a title. ?refresh=true asks for a live pull now; each caller gets a few per hour and the
+    /// process has an hourly ceiling, beyond which the cached reading is served.
+    /// </summary>
     [HttpGet("{type}/{id:int}")]
     public async Task<ActionResult<SocialMeterResponseDto>> Get([FromRoute] MediaType type, [FromRoute] int id, [FromQuery] bool refresh = false, CancellationToken ct = default)
     {
+        if (refresh && !_budget.TryAcquireForcedRefresh(HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"))
+        {
+            return StatusCode(StatusCodes.Status429TooManyRequests, new ProblemDetails
+            {
+                Status = 429,
+                Title = "Too many live refreshes",
+                Detail = $"Each reader gets {_options.MaxForcedRefreshesPerHourPerCaller} live refreshes an hour. The cached reading is still available without ?refresh."
+            });
+        }
+
         var result = await _socialMeter.GetScoreAsync(type, id, refresh, ct);
         return result is null ? NotFound() : Ok(result);
     }

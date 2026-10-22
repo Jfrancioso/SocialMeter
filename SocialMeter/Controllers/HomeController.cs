@@ -26,7 +26,9 @@ public sealed class HomeController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<HomeResponseDto>> Get([FromQuery] string region = "US", CancellationToken ct = default)
     {
-        var key = $"home:{region.ToUpperInvariant()}";
+        // Only a two-letter country code may become a cache key; anything else collapses to the default so the cache cannot be bypassed.
+        region = region.Length == 2 && region.All(char.IsAsciiLetter) ? region.ToUpperInvariant() : "US";
+        var key = $"home:{region}";
         if (_cache.TryGetValue(key, out HomeResponseDto? cached) && cached is not null)
             return Ok(cached);
 

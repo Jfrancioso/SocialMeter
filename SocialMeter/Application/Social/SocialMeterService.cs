@@ -22,8 +22,12 @@ public sealed class SocialMeterService : ISocialMeterService
     private readonly ITitleTracker _tracker;
     private readonly TrustPolicy _trust;
     private readonly ScoreHistoryService _history;
+    private readonly LivePullBudget _budget;
     private readonly SocialMeterOptions _options;
     private readonly ILogger<SocialMeterService> _logger;
+
+    // Rescore walks every stored post; two at once would double the model bill and race on the same rows.
+    private static readonly SemaphoreSlim RescoreLock = new(1, 1);
 
     public SocialMeterService(
         SocialMeterDbContext db,
@@ -34,6 +38,7 @@ public sealed class SocialMeterService : ISocialMeterService
         ITitleTracker tracker,
         TrustPolicy trust,
         ScoreHistoryService history,
+        LivePullBudget budget,
         IOptions<SocialMeterOptions> options,
         ILogger<SocialMeterService> logger)
     {
@@ -45,6 +50,7 @@ public sealed class SocialMeterService : ISocialMeterService
         _tracker = tracker;
         _trust = trust;
         _history = history;
+        _budget = budget;
         _options = options.Value;
         _logger = logger;
     }
@@ -74,15 +80,24 @@ public sealed class SocialMeterService : ISocialMeterService
             var stale = sinceRefresh > TimeSpan.FromHours(_options.RefreshAfterHours);
             var recentlyPulled = sinceRefresh < TimeSpan.FromMinutes(_options.MinForcedRefreshMinutes);
 
-            if (tracked && (stale || (forceRefresh && !recentlyPulled)))
+            var wantsPull = tracked && (stale || (forceRefresh && !recentlyPulled));
+            if (wantsPull && !_budget.TryAcquirePull())
+            {
+                // The hourly ceiling is the last line against a runaway bill; the reader sees the cache and the reason.
+                _logger.LogWarning("Live pull budget exhausted; serving cached reading for {Type} {Id}", mediaType, tmdbId);
+                wantsPull = false;
+                sourceStatus.AddRange(_sources.Select(s => new SourceStatusDto { Platform = s.Platform, Configured = s.IsConfigured, Error = s.IsConfigured ? "Live reads paused: hourly budget reached" : null }));
+            }
+            else if (!wantsPull)
+            {
+                sourceStatus.AddRange(_sources.Select(s => new SourceStatusDto { Platform = s.Platform, Configured = s.IsConfigured }));
+            }
+
+            if (wantsPull)
             {
                 fromCache = false;
                 foreach (var source in _sources)
                     sourceStatus.Add(await IngestAsync(source, title, now, ct));
-            }
-            else
-            {
-                sourceStatus.AddRange(_sources.Select(s => new SourceStatusDto { Platform = s.Platform, Configured = s.IsConfigured }));
             }
         }
         finally
@@ -304,6 +319,20 @@ public sealed class SocialMeterService : ISocialMeterService
 
     public async Task<int> RescoreAsync(bool force, CancellationToken ct = default)
     {
+        if (!await RescoreLock.WaitAsync(0, ct))
+            throw new Common.OperationInProgressException("Rescore");
+        try
+        {
+            return await RescoreCoreAsync(force, ct);
+        }
+        finally
+        {
+            RescoreLock.Release();
+        }
+    }
+
+    private async Task<int> RescoreCoreAsync(bool force, CancellationToken ct)
+    {
         var now = DateTime.UtcNow;
         var posts = await _db.SocialPosts.ToListAsync(ct);
         var assessed = 0;
@@ -443,7 +472,8 @@ public sealed class SocialMeterService : ISocialMeterService
                 post.Content = c.Content;
                 post.ContentHash = TrustPolicy.ContentHash(c.Content);
                 post.MediaJson = mediaJson ?? post.MediaJson;
-                post.Sensitive = c.Sensitive;
+                // Sticky: once the platform or our own read of the image flagged it, a later fetch without the flag must not un-hide it.
+                post.Sensitive = post.Sensitive || c.Sensitive;
                 post.AuthorId ??= c.AuthorId;
                 post.AuthorCreatedAt ??= c.AuthorCreatedAt;
                 post.AuthorReputation = c.AuthorReputation ?? post.AuthorReputation;

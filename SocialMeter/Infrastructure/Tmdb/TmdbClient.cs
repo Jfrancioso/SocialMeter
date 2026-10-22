@@ -107,11 +107,18 @@ public sealed class TmdbClient
         return new PagedResult<Title>(items, dto.Page == 0 ? page : dto.Page, dto.TotalPages, dto.TotalResults);
     }
 
+    // With a read-access token the credential rides in the Authorization header (set on the HttpClient at registration),
+    // so nothing secret is ever part of the URL. The v3 key in the query string is the fallback.
     private string WithKey(string pathAndQuery, int? page = null)
     {
-        var sep = pathAndQuery.Contains('?') ? "&" : "?";
-        var url = $"{pathAndQuery}{sep}api_key={Uri.EscapeDataString(_options.ApiKey)}";
-        return page is null ? url : $"{url}&page={page}";
+        var url = pathAndQuery;
+        if (!_options.UseBearer)
+        {
+            var sep = pathAndQuery.Contains('?') ? "&" : "?";
+            url = $"{pathAndQuery}{sep}api_key={Uri.EscapeDataString(_options.ApiKey)}";
+        }
+        if (page is null) return url;
+        return $"{url}{(url.Contains('?') ? "&" : "?")}page={page}";
     }
 
     private static string Segment(MediaType mediaType) => mediaType == MediaType.Tv ? "tv" : "movie";
@@ -120,8 +127,8 @@ public sealed class TmdbClient
 
     private void EnsureConfigured()
     {
-        if (string.IsNullOrWhiteSpace(_options.ApiKey))
-            throw new InvalidOperationException("TMDB is not configured: Tmdb:ApiKey is missing.");
+        if (!_options.IsConfigured)
+            throw new InvalidOperationException("TMDB is not configured: set Tmdb:ReadAccessToken or Tmdb:ApiKey.");
 
         if (_http.BaseAddress is null)
             throw new InvalidOperationException("TMDB HttpClient BaseAddress is not configured.");
