@@ -84,6 +84,10 @@ public static class SocialScoreCalculator
         return Engagement(post) * recency * Credit(post);
     }
 
+    /// <summary>This post's share of a title's total weight, 0–100; null when there is no weight to share.</summary>
+    public static double? Share(SocialPost post, double totalWeight, DateTime nowUtc)
+        => totalWeight > 0 ? 100 * Weight(post, nowUtc) / totalWeight : null;
+
     /// <summary>The fraction of a full post this one is worth on trust and substance alone (0–1).</summary>
     public static double Credit(SocialPost post)
         => Math.Clamp(post.TrustWeight, 0, 1) * (0.5 + 0.5 * Math.Clamp(post.Substance, 0, 1));

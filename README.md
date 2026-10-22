@@ -17,7 +17,7 @@ TV shows, scored from public conversation on Reddit and X and shown beside TMDB,
   duplicate text collapses to one (`TrustPolicy`). Thresholds are server-side only.
 - **Deletion sync.** `DeletionSyncService` re-checks stored posts against the platform (Reddit `/api/info`, X tweet lookup)
   and purges anything deleted or removed there, prunes posts older than `RetentionDays`, and recomputes affected
-  scores. Runs every `DeletionSyncHours` via `DeletionSyncWorker`; `POST /api/socialmeter/sync-deletions` runs it now.
+  scores. Runs every `DeletionSyncHours` via `DeletionSyncWorker`; `POST /api/operator/sync-deletions` runs it now.
 - **No profiling.** Nothing is inferred about users beyond sentiment toward a title; data is never sold or shared.
 
 ## How the number is made
@@ -44,7 +44,7 @@ dotnet run --launch-profile https
 
 Prefer `Tmdb:ReadAccessToken` (the v4 token) over `Tmdb:ApiKey`: it travels in a header, never in a URL.
 
-Operator endpoints (`rescore`, `sync-deletions`, `tracked/refresh`) require the `X-Admin-Key` header and are disabled until
+Operator endpoints (`POST /api/operator/rescore`, `sync-deletions`, `tracked/refresh`) require the `X-Admin-Key` header and are disabled until
 `Admin:ApiKey` is set. Every client is limited to 120 requests a minute; forced refreshes are limited per client and the
 process has an hourly ceiling on live pulls (`SocialMeter:MaxLivePullsPerHour`), beyond which cached readings are served.
 
@@ -79,4 +79,4 @@ Change the prompt, run the eval, read the report — that is the loop. Add a cas
 | `GET /api/socialmeter/{type}/{id}/explain` | The numbers behind the reading: effective posts, 95 % margin, weight by sentiment and substance, top drivers |
 | `GET /api/socialmeter/{type}/{id}/history?days=30` | One reading per day plus the Mann-Kendall trend verdict |
 | `GET /api/socialmeter/snapshots?keys=movie:1,tv:2` | Cached readings for many titles |
-| `POST /api/socialmeter/sync-deletions` | Run the deletion sync now |
+| `POST /api/operator/sync-deletions` | Run the deletion sync now |

@@ -3,26 +3,34 @@ using SocialMeter.Domain.Models;
 
 namespace SocialMeter.Application.Abstractions;
 
+/// <summary>The reading for one title, refreshing from the social sources when it is due and allowed.</summary>
 public interface ISocialMeterService
 {
-    /// <summary>Returns the title's SocialMeter reading, refreshing from the social sources when the cached one is stale.</summary>
     Task<SocialMeterResponseDto?> GetScoreAsync(MediaType mediaType, int tmdbId, bool forceRefresh, CancellationToken ct = default);
+}
 
+/// <summary>The numbers behind a cached reading. Never contacts the sources.</summary>
+public interface IScoreExplainer
+{
+    Task<ScoreExplanationDto?> ExplainAsync(MediaType mediaType, int tmdbId, CancellationToken ct = default);
+}
+
+/// <summary>Read-only queries over stored posts, cached readings and daily history. Never contacts the sources.</summary>
+public interface IPostQueries
+{
     Task<PagedResult<SocialPostDto>> GetPostsAsync(MediaType mediaType, int tmdbId, Sentiment? sentiment, string? platform, int page, int pageSize, CancellationToken ct = default);
 
-    /// <summary>Cached readings only; never triggers a fetch. Keys look like "movie:693134".</summary>
+    /// <summary>Cached readings only. Keys look like "movie:693134".</summary>
     Task<IReadOnlyDictionary<string, SnapshotDto>> GetSnapshotsAsync(IEnumerable<(MediaType MediaType, int TmdbId)> keys, CancellationToken ct = default);
 
-    /// <summary>
-    /// Re-assesses stored posts and recomputes every snapshot, without contacting the sources.
-    /// By default only posts the current assessor hasn't read yet are sent to it (cheap); <paramref name="force"/>
-    /// re-assesses everything. Returns the number of posts assessed.
-    /// </summary>
-    Task<int> RescoreAsync(bool force, CancellationToken ct = default);
-
-    /// <summary>The numbers behind the cached reading: weight shares, substance mix, top drivers. Never contacts the sources.</summary>
-    Task<ScoreExplanationDto?> ExplainAsync(MediaType mediaType, int tmdbId, CancellationToken ct = default);
-
-    /// <summary>Daily readings and the trend verdict for the last <paramref name="days"/> days.</summary>
     Task<ScoreHistoryDto> GetHistoryAsync(MediaType mediaType, int tmdbId, int days, CancellationToken ct = default);
+}
+
+/// <summary>
+/// Re-assesses stored posts and recomputes every snapshot, without contacting the sources. By default only posts the
+/// current assessor hasn't read are sent to it (cheap); <c>force</c> re-assesses everything. Returns the number assessed.
+/// </summary>
+public interface IRescoreService
+{
+    Task<int> RescoreAsync(bool force, CancellationToken ct = default);
 }

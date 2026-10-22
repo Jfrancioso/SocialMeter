@@ -10,45 +10,24 @@ using SocialMeter.Web.Filters;
 
 namespace SocialMeter.Controllers;
 
+/// <summary>Readings, explanations, history and posts for a title. Thin: every action is one call into the application layer.</summary>
 [ApiController]
 [Route("api/socialmeter")]
 public sealed class SocialMeterController : ControllerBase
 {
-    private readonly ISocialMeterService _socialMeter;
-    private readonly DeletionSyncService _deletionSync;
+    private readonly ISocialMeterService _meter;
+    private readonly IScoreExplainer _explainer;
+    private readonly IPostQueries _queries;
     private readonly LivePullBudget _budget;
     private readonly SocialMeterOptions _options;
 
-    public SocialMeterController(ISocialMeterService socialMeter, DeletionSyncService deletionSync, LivePullBudget budget, IOptions<SocialMeterOptions> options)
+    public SocialMeterController(ISocialMeterService meter, IScoreExplainer explainer, IPostQueries queries, LivePullBudget budget, IOptions<SocialMeterOptions> options)
     {
-        _socialMeter = socialMeter;
-        _deletionSync = deletionSync;
+        _meter = meter;
+        _explainer = explainer;
+        _queries = queries;
         _budget = budget;
         _options = options.Value;
-    }
-
-    /// <summary>
-    /// Runs the deletion sync now: stored posts are re-checked at their platform and any that were deleted or removed
-    /// there are purged, then affected scores are recomputed. Operator endpoint: needs the X-Admin-Key header.
-    /// </summary>
-    [HttpPost("sync-deletions")]
-    [RequireAdminKey]
-    public async Task<ActionResult<DeletionSyncResult>> SyncDeletions(CancellationToken ct)
-    {
-        try { return Ok(await _deletionSync.RunAsync(ct)); }
-        catch (OperationInProgressException ex) { return Conflict(new ProblemDetails { Status = 409, Title = ex.Message }); }
-    }
-
-    /// <summary>
-    /// Re-assesses stored posts with the current assessor and trust rules; no social-source calls. Posts the assessor has
-    /// already read are skipped unless ?force=true (with Claude configured, force costs tokens). Operator endpoint.
-    /// </summary>
-    [HttpPost("rescore")]
-    [RequireAdminKey]
-    public async Task<ActionResult> Rescore([FromQuery] bool force = false, CancellationToken ct = default)
-    {
-        try { return Ok(new { rescored = await _socialMeter.RescoreAsync(force, ct) }); }
-        catch (OperationInProgressException ex) { return Conflict(new ProblemDetails { Status = 409, Title = ex.Message }); }
     }
 
     /// <summary>
@@ -68,7 +47,7 @@ public sealed class SocialMeterController : ControllerBase
             });
         }
 
-        var result = await _socialMeter.GetScoreAsync(type, id, refresh, ct);
+        var result = await _meter.GetScoreAsync(type, id, refresh, ct);
         return result is null ? NotFound() : Ok(result);
     }
 
@@ -76,14 +55,14 @@ public sealed class SocialMeterController : ControllerBase
     [HttpGet("{type}/{id:int}/explain")]
     public async Task<ActionResult<ScoreExplanationDto>> Explain([FromRoute] MediaType type, [FromRoute] int id, CancellationToken ct = default)
     {
-        var result = await _socialMeter.ExplainAsync(type, id, ct);
+        var result = await _explainer.ExplainAsync(type, id, ct);
         return result is null ? NotFound() : Ok(result);
     }
 
     /// <summary>One reading per day plus the Mann-Kendall trend verdict over the configured window.</summary>
     [HttpGet("{type}/{id:int}/history")]
     public async Task<ActionResult<ScoreHistoryDto>> History([FromRoute] MediaType type, [FromRoute] int id, [FromQuery] int days = 30, CancellationToken ct = default)
-        => Ok(await _socialMeter.GetHistoryAsync(type, id, days, ct));
+        => Ok(await _queries.GetHistoryAsync(type, id, days, ct));
 
     [HttpGet("{type}/{id:int}/posts")]
     public async Task<ActionResult<PagedResult<SocialPostDto>>> Posts(
@@ -94,7 +73,7 @@ public sealed class SocialMeterController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
-        => Ok(await _socialMeter.GetPostsAsync(type, id, sentiment, platform, page, pageSize, ct));
+        => Ok(await _queries.GetPostsAsync(type, id, sentiment, platform, page, pageSize, ct));
 
     /// <summary>Cached readings for many titles at once, e.g. ?keys=movie:693134,tv:1399. Never contacts the sources.</summary>
     [HttpGet("snapshots")]
@@ -111,6 +90,6 @@ public sealed class SocialMeterController : ControllerBase
         if (parsed.Count > 200)
             return BadRequest(new { error = "At most 200 keys per request." });
 
-        return Ok(await _socialMeter.GetSnapshotsAsync(parsed, ct));
+        return Ok(await _queries.GetSnapshotsAsync(parsed, ct));
     }
 }

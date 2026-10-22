@@ -26,13 +26,13 @@ GET {{baseUrl}}/api/socialmeter/movie/693134?refresh=true
 GET {{baseUrl}}/api/socialmeter/movie/693134/posts?sentiment=negative&page=1&pageSize=20
 
 ### Rebuild the tracked set (current, trending, seasonal, electric titles) now
-POST {{baseUrl}}/api/titles/tracked/refresh
+POST {{baseUrl}}/api/operator/tracked/refresh
 
 ### Run the deletion sync now (purges posts deleted/removed at the source, prunes old posts, recomputes scores)
-POST {{baseUrl}}/api/socialmeter/sync-deletions
+POST {{baseUrl}}/api/operator/sync-deletions
 
 ### Re-score stored posts after changing the lexicon or trust settings (no source calls)
-POST {{baseUrl}}/api/socialmeter/rescore
+POST {{baseUrl}}/api/operator/rescore
 
 ### Cached readings for a batch of titles
 GET {{baseUrl}}/api/socialmeter/snapshots?keys=movie:693134,movie:558449
