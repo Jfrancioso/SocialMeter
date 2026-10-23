@@ -1,3 +1,5 @@
+using SocialMeter.Application.Guardrails;
+
 namespace SocialMeter.Application.Social;
 
 /// <summary>Why a live pull did or didn't run, before the hourly budget is consulted.</summary>
@@ -27,10 +29,17 @@ public static class PullPolicy
         return PullDecision.Fresh;
     }
 
-    /// <summary>The word stored in RefreshLog.Outcome.</summary>
-    public static string OutcomeName(PullDecision decision, bool budgetRefused) => decision switch
+    /// <summary>The word stored in RefreshLog.Outcome. A due pull that a guardrail turned away says which one.</summary>
+    public static string OutcomeName(PullDecision decision, PullRefusal refusal) => decision switch
     {
-        PullDecision.Pull => budgetRefused ? "budget-reached" : "pulled",
+        PullDecision.Pull => refusal switch
+        {
+            PullRefusal.None => "pulled",
+            PullRefusal.HourlyCap => "budget-reached",
+            PullRefusal.DailyCap => "daily-cap",
+            PullRefusal.SpendLimit => "spend-limit",
+            _ => "switched-off"
+        },
         PullDecision.NotTracked => "not-tracked",
         PullDecision.CoolingDown => "cooldown",
         _ => "fresh"

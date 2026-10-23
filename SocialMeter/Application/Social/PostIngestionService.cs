@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Guardrails;
 using SocialMeter.Contracts.Social;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Data;
@@ -17,14 +18,16 @@ public sealed class PostIngestionService
     private readonly IPostAssessor _assessor;
     private readonly VerdictAssessor _verdicts;
     private readonly TrustPolicy _trust;
+    private readonly SourceBreakers _breakers;
     private readonly ILogger<PostIngestionService> _logger;
 
-    public PostIngestionService(SocialMeterDbContext db, IPostAssessor assessor, VerdictAssessor verdicts, TrustPolicy trust, ILogger<PostIngestionService> logger)
+    public PostIngestionService(SocialMeterDbContext db, IPostAssessor assessor, VerdictAssessor verdicts, TrustPolicy trust, SourceBreakers breakers, ILogger<PostIngestionService> logger)
     {
         _db = db;
         _assessor = assessor;
         _verdicts = verdicts;
         _trust = trust;
+        _breakers = breakers;
         _logger = logger;
     }
 
@@ -87,9 +90,14 @@ public sealed class PostIngestionService
         if (!source.IsConfigured)
             return (source, null, new SourceStatusDto { Platform = source.Platform, Configured = false });
 
+        // A source that keeps failing (or said it is out of credit) is skipped until its breaker's cool-down ends.
+        if (!_breakers.Allows(source.Platform))
+            return (source, null, new SourceStatusDto { Platform = source.Platform, Configured = true, Fetched = 0, Error = PublicSourceError });
+
         try
         {
             var candidates = await source.FetchAsync(title, ct);
+            _breakers.Succeeded(source.Platform);
             return (source, candidates, new SourceStatusDto { Platform = source.Platform, Configured = true, Fetched = candidates.Count });
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -97,6 +105,7 @@ public sealed class PostIngestionService
             // The full error (often an upstream API's own response) goes to the logs only; this status is in public
             // responses, so it says no more than that the source didn't answer.
             _logger.LogWarning(ex, "{Platform} fetch failed for {Title}", source.Platform, title.Name);
+            _breakers.Failed(source.Platform, ex);
             return (source, null, new SourceStatusDto { Platform = source.Platform, Configured = true, Fetched = 0, Error = PublicSourceError });
         }
     }
@@ -184,7 +193,7 @@ public sealed class PostIngestionService
         var result = assessment.ToResult();
         post.Sentiment = result.Label;
         post.SentimentScore = result.Score;
-        post.Analyzer = analyzer;
+        post.Analyzer = assessment.ReadBy ?? analyzer;
         post.AnalyzerNote = assessment.Note is null ? null : Trim(assessment.Note, 120);
         post.Substance = Math.Clamp(assessment.Substance, 0, 1);
         post.TrustWeight = trust.Weight;

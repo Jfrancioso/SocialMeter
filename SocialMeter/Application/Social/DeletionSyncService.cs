@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Guardrails;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Data;
 using SocialMeter.Options;
@@ -16,6 +17,7 @@ public sealed class DeletionSyncService
     private readonly SocialMeterDbContext _db;
     private readonly IEnumerable<ISocialSource> _sources;
     private readonly TitleRecomputer _recomputer;
+    private readonly SourceBreakers _breakers;
     private readonly SocialMeterOptions _options;
     private readonly ILogger<DeletionSyncService> _logger;
 
@@ -23,12 +25,14 @@ public sealed class DeletionSyncService
         SocialMeterDbContext db,
         IEnumerable<ISocialSource> sources,
         TitleRecomputer recomputer,
+        SourceBreakers breakers,
         IOptions<SocialMeterOptions> options,
         ILogger<DeletionSyncService> logger)
     {
         _db = db;
         _sources = sources;
         _recomputer = recomputer;
+        _breakers = breakers;
         _options = options.Value;
         _logger = logger;
     }
@@ -80,6 +84,13 @@ public sealed class DeletionSyncService
             result.Sources.Add(status);
             if (!source.IsConfigured) continue;
 
+            // Out of credit or failing: don't keep paying for (or hammering) it. The posts stay due and go first next run.
+            if (!_breakers.Allows(source.Platform))
+            {
+                status.Error = "Skipped: paused after errors";
+                continue;
+            }
+
             var due = await _db.SocialPosts
                 .Where(p => p.Platform == source.Platform
                             && (p.LastCheckedAt == null || p.LastCheckedAt < recheckBefore))
@@ -94,11 +105,13 @@ public sealed class DeletionSyncService
             try
             {
                 removed = await source.FindRemovedAsync(due.Select(p => p.ExternalId).ToList(), ct);
+                _breakers.Succeeded(source.Platform);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // Leave LastCheckedAt untouched so these come up first next run.
                 _logger.LogWarning(ex, "{Platform} deletion check failed; will retry next run", source.Platform);
+                _breakers.Failed(source.Platform, ex);
                 status.Error = ex.Message;
                 continue;
             }

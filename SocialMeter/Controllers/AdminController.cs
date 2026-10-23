@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
+using SocialMeter.Application.Guardrails;
 using SocialMeter.Application.Moderation;
 using SocialMeter.Contracts.Admin;
 using SocialMeter.Web.Filters;
@@ -7,7 +8,7 @@ using SocialMeter.Web.Filters;
 namespace SocialMeter.Controllers;
 
 /// <summary>
-/// What the site's /admin page calls: who am I, hide or restore a post, and the moderation log. In production Cloudflare
+/// What the site's /admin page calls: who am I, hide or restore a post, the moderation log, and health and spend. In production Cloudflare
 /// Access stands in front of this path and the API checks its token again (see <see cref="RequireAdminAttribute"/>).
 /// The only CORS policy that sends cookies is this controller's, so the Access cookie never rides along anywhere else.
 /// </summary>
@@ -18,11 +19,13 @@ namespace SocialMeter.Controllers;
 public sealed class AdminController : ControllerBase
 {
     private readonly ModerationService _moderation;
+    private readonly GuardrailStatusService _guardrails;
     private readonly IConfiguration _configuration;
 
-    public AdminController(ModerationService moderation, IConfiguration configuration)
+    public AdminController(ModerationService moderation, GuardrailStatusService guardrails, IConfiguration configuration)
     {
         _moderation = moderation;
+        _guardrails = guardrails;
         _configuration = configuration;
     }
 
@@ -80,4 +83,9 @@ public sealed class AdminController : ControllerBase
     [HttpGet("moderation")]
     public async Task<ActionResult<IReadOnlyList<ModerationEntryDto>>> Moderation([FromQuery] int take = 50, CancellationToken ct = default)
         => Ok(await _moderation.RecentAsync(take, ct));
+
+    /// <summary>Today's spend and pulls against the limits, each outside service's breaker, and the watch windows.</summary>
+    [HttpGet("guardrails")]
+    public async Task<ActionResult<GuardrailStatusDto>> Guardrails(CancellationToken ct = default)
+        => Ok(await _guardrails.GetAsync(ct));
 }

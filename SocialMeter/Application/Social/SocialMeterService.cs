@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Guardrails;
 using SocialMeter.Contracts.Social;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Data;
@@ -50,8 +51,9 @@ public sealed class SocialMeterService : ISocialMeterService
         _logger = logger;
     }
 
-    public async Task<SocialMeterResponseDto?> GetScoreAsync(MediaType mediaType, int tmdbId, bool forceRefresh, CancellationToken ct = default)
+    public async Task<SocialMeterResponseDto?> GetScoreAsync(MediaType mediaType, int tmdbId, ReadTrigger trigger, CancellationToken ct = default)
     {
+        var forceRefresh = trigger != ReadTrigger.Page;
         var title = await _titles.GetDetailsAsync(mediaType, tmdbId, ct);
         if (title is null)
             return null;
@@ -65,7 +67,9 @@ public sealed class SocialMeterService : ISocialMeterService
         using var _ = await _gate.AcquireAsync(mediaType, tmdbId, ct);
 
         var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == tmdbId && s.MediaType == mediaType, ct);
-        var (pull, sourceStatus, outcome, paused) = await DecideAndPullAsync(title, snapshot, tracked, forceRefresh, now, ct);
+        var attempt = await DecideAndPullAsync(title, snapshot, tracked, forceRefresh, now, ct);
+        var pull = attempt.Pulled;
+        var paused = attempt.Refusal != PullRefusal.None;
 
         var posts = await _db.SocialPosts.Where(p => p.TmdbId == tmdbId && p.MediaType == mediaType).ToListAsync(ct);
         if (pull)
@@ -75,9 +79,9 @@ public sealed class SocialMeterService : ISocialMeterService
         }
 
         var meter = SocialScoreCalculator.Compute(posts, now, _options.Scoring);
-        snapshot = await PersistAsync(snapshot, meter, mediaType, tmdbId, pull, sourceStatus, now, ct);
+        snapshot = await PersistAsync(snapshot, meter, mediaType, tmdbId, pull, attempt.Sources, now, ct);
         if (forceRefresh || pull)
-            await LogRefreshAsync(title, forceRefresh, pull, outcome, sourceStatus, now, ct);
+            await LogRefreshAsync(title, trigger, pull, attempt.Outcome, attempt.Sources, now, ct);
 
         var counted = posts.Where(p => !p.Excluded).ToList();
         var totalWeight = counted.Sum(p => SocialScoreCalculator.Weight(p, now));
@@ -96,23 +100,23 @@ public sealed class SocialMeterService : ISocialMeterService
             TrackedReason = trackedReason,
             Meter = meter,
             TopPosts = top,
-            Sources = sourceStatus,
+            Sources = attempt.Sources,
             // A title the sources were never read for has no "last refreshed" time: inventing one ("updated just now") made a
             // paused or skipped read look like a finished one that found nothing.
             LastRefreshedAt = snapshot?.LastRefreshedAt,
             ReadsPaused = paused,
             FromCache = !pull,
             NextRefreshAllowedAt = paused
-                ? now + LivePullBudget.RefillEvery
+                ? LivePullBudget.RetryAfter(attempt.Refusal, now)
                 : snapshot?.LastRefreshedAt.AddMinutes(_options.MinForcedRefreshMinutes)
         };
     }
 
-    /// <summary>
-    /// Whether to pull now, the per-source outcome either way, the outcome word for the refresh log, and whether a due pull
-    /// was turned away by the hourly budget.
-    /// </summary>
-    private async Task<(bool Pulled, List<SourceStatusDto> Status, string Outcome, bool Paused)> DecideAndPullAsync(Title title, TitleSnapshot? snapshot, bool tracked, bool forceRefresh, DateTime now, CancellationToken ct)
+    /// <summary>What happened when a reading was asked for: whether the sources were read, how each one answered, the word
+    /// for the refresh log, and which guardrail (if any) turned a due pull away.</summary>
+    private sealed record PullAttempt(bool Pulled, List<SourceStatusDto> Sources, string Outcome, PullRefusal Refusal);
+
+    private async Task<PullAttempt> DecideAndPullAsync(Title title, TitleSnapshot? snapshot, bool tracked, bool forceRefresh, DateTime now, CancellationToken ct)
     {
         var sinceRefresh = snapshot is null ? TimeSpan.MaxValue : now - snapshot.LastRefreshedAt;
         var stale = sinceRefresh > TimeSpan.FromHours(_options.RefreshAfterHours);
@@ -120,18 +124,25 @@ public sealed class SocialMeterService : ISocialMeterService
         var decision = PullPolicy.Decide(tracked, stale, forceRefresh, recentlyPulled);
 
         if (decision != PullDecision.Pull)
-            return (false, Idle(null), PullPolicy.OutcomeName(decision, budgetRefused: false), false);
+            return new PullAttempt(false, Idle(null), PullPolicy.OutcomeName(decision, PullRefusal.None), PullRefusal.None);
 
-        if (!_budget.TryAcquirePull())
-        {
-            // The hourly ceiling is the last line against a runaway bill; the reader sees the cache and the reason.
-            _logger.LogWarning("Live pull budget exhausted; serving cached reading for {Type} {Id}", title.MediaType, title.TmdbId);
-            return (false, Idle("Live reads paused: hourly budget reached"), PullPolicy.OutcomeName(decision, budgetRefused: true), true);
-        }
+        // The guardrails are the last line against a runaway bill; the reader sees the cache and a plain reason.
+        // GuardrailLog has already written the trip (with the numbers) for the alert email.
+        var refusal = _budget.TryAcquirePull();
+        if (refusal != PullRefusal.None)
+            return new PullAttempt(false, Idle(PublicNote(refusal)), PullPolicy.OutcomeName(decision, refusal), refusal);
 
         var status = await _ingestion.IngestAllAsync(_sources, title, now, ct);
-        return (true, status, PullPolicy.OutcomeName(decision, budgetRefused: false), false);
+        return new PullAttempt(true, status, PullPolicy.OutcomeName(decision, PullRefusal.None), PullRefusal.None);
     }
+
+    /// <summary>What readers are told. Spend and caps stay out of public responses; the admin page has the numbers.</summary>
+    private static string PublicNote(PullRefusal refusal) => refusal switch
+    {
+        PullRefusal.HourlyCap => "Live reads paused: hourly budget reached",
+        PullRefusal.DailyCap or PullRefusal.SpendLimit => "Live reads paused for today",
+        _ => "Live reads paused"
+    };
 
     /// <summary>
     /// Notes a Refresh press or a pull in RefreshLogs: title, time, trigger and outcome, never who asked. Only requests
@@ -139,7 +150,7 @@ public sealed class SocialMeterService : ISocialMeterService
     /// logging adds one small row to work already under way and never wakes a paused database. A failed write is logged
     /// and ignored: the reading the reader asked for matters more than the record of it.
     /// </summary>
-    private async Task LogRefreshAsync(Title title, bool forceRefresh, bool pulled, string outcome, List<SourceStatusDto> status, DateTime now, CancellationToken ct)
+    private async Task LogRefreshAsync(Title title, ReadTrigger trigger, bool pulled, string outcome, List<SourceStatusDto> status, DateTime now, CancellationToken ct)
     {
         var entry = _db.RefreshLogs.Add(new RefreshLog
         {
@@ -147,7 +158,7 @@ public sealed class SocialMeterService : ISocialMeterService
             MediaType = title.MediaType,
             TmdbId = title.TmdbId,
             TitleName = title.Name.Length > 200 ? title.Name[..200] : title.Name,
-            Trigger = forceRefresh ? "button" : "page",
+            Trigger = trigger.ToString().ToLowerInvariant(),
             Pulled = pulled,
             Outcome = outcome,
             PostsFetched = pulled ? status.Sum(s => s.Fetched ?? 0) : null

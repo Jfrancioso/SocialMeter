@@ -2,9 +2,11 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Anthropic;
+using Anthropic.Exceptions;
 using Anthropic.Models.Messages;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Guardrails;
 using SocialMeter.Domain.Models;
 using SocialMeter.Options;
 using MediaType = SocialMeter.Domain.Models.MediaType;
@@ -90,16 +92,24 @@ public sealed class ClaudePostAssessor : IPostAssessor
         })
     };
 
+    /// <summary>This assessor's name in SourceBreakers and on the admin page.</summary>
+    public const string BreakerName = "claude";
+
     private readonly AnthropicClient _client;
     private readonly LexiconPostAssessorFallback _fallback;
     private readonly AnthropicOptions _options;
+    private readonly UsageMeter _usage;
+    private readonly SourceBreakers _breakers;
     private readonly ILogger<ClaudePostAssessor> _logger;
 
-    public ClaudePostAssessor(AnthropicClient client, LexiconPostAssessorFallback fallback, IOptions<AnthropicOptions> options, ILogger<ClaudePostAssessor> logger)
+    public ClaudePostAssessor(AnthropicClient client, LexiconPostAssessorFallback fallback, IOptions<AnthropicOptions> options,
+        UsageMeter usage, SourceBreakers breakers, ILogger<ClaudePostAssessor> logger)
     {
         _client = client;
         _fallback = fallback;
         _options = options.Value;
+        _usage = usage;
+        _breakers = breakers;
         _logger = logger;
     }
 
@@ -112,17 +122,43 @@ public sealed class ClaudePostAssessor : IPostAssessor
         return await ParallelBatches.RunAsync(posts, Math.Clamp(_options.BatchSize, 1, 50), Math.Clamp(_options.MaxParallelBatches, 1, 8),
             async batch =>
             {
+                // While Claude's breaker is open (out of credit, rate limited, failing) the lexicon reads the batch without a
+                // doomed call first. Those posts keep the lexicon's name, so a later rescore can give them to Claude.
+                if (!_breakers.Allows(BreakerName))
+                    return await FallbackAsync(title, batch, ct);
+
                 try
                 {
-                    return await AssessBatchAsync(title, batch, ct);
+                    var results = await AssessBatchAsync(title, batch, ct);
+                    _breakers.Succeeded(BreakerName);
+                    return results;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _logger.LogWarning(ex, "Claude assessment failed for {Count} posts about {Title}; using the lexicon for this batch", batch.Count, title.Name);
-                    return await _fallback.Inner.AssessAsync(title, batch, ct);
+                    _breakers.Failed(BreakerName, Classify(ex));
+                    return await FallbackAsync(title, batch, ct);
                 }
             }, ct);
     }
+
+    /// <summary>The lexicon's reading, marked as the lexicon's, so these posts are not mistaken for ones Claude read.</summary>
+    private async Task<IReadOnlyList<PostAssessment>> FallbackAsync(Title title, IReadOnlyList<SocialPostCandidate> batch, CancellationToken ct)
+    {
+        var results = await _fallback.Inner.AssessAsync(title, batch, ct);
+        return results.Select(r => r with { ReadBy = _fallback.Inner.Name }).ToList();
+    }
+
+    /// <summary>The Anthropic SDK's own exception types say what went wrong; the ones that won't fix themselves stop calls at once.</summary>
+    private static BreakerFailure Classify(Exception ex) => ex switch
+    {
+        AnthropicRateLimitException => new("rate limited (429)", HardStop: true),
+        AnthropicUnauthorizedException or AnthropicForbiddenException => new("API key rejected", HardStop: true),
+        AnthropicApiException api when api.ResponseBody?.Contains("credit balance", StringComparison.OrdinalIgnoreCase) == true
+            => new("out of credit", HardStop: true),
+        AnthropicApiException api => new($"HTTP {(int)api.StatusCode}", HardStop: false),
+        _ => SourceBreakers.Classify(ex)
+    };
 
     private async Task<IReadOnlyList<PostAssessment>> AssessBatchAsync(Title title, IReadOnlyList<SocialPostCandidate> batch, CancellationToken ct)
     {
@@ -138,6 +174,9 @@ public sealed class ClaudePostAssessor : IPostAssessor
                 Format = new JsonOutputFormat { Schema = Schema }
             }
         }, ct);
+
+        // Count tokens as soon as they are spent, even if the answer below turns out to be unusable.
+        _usage.RecordClaude(response.Usage.InputTokens, response.Usage.OutputTokens);
 
         if (response.StopReason == "refusal")
             throw new InvalidOperationException($"Claude declined the request ({response.StopDetails?.Category}).");

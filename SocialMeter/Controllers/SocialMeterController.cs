@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Application.Common;
-using SocialMeter.Application.Social;
+using SocialMeter.Application.Guardrails;
 using SocialMeter.Contracts.Social;
 using SocialMeter.Domain.Models;
 using SocialMeter.Options;
@@ -21,15 +21,13 @@ public sealed class SocialMeterController : ControllerBase
     private readonly IScoreExplainer _explainer;
     private readonly IPostQueries _queries;
     private readonly LivePullBudget _budget;
-    private readonly SocialMeterOptions _options;
 
-    public SocialMeterController(ISocialMeterService meter, IScoreExplainer explainer, IPostQueries queries, LivePullBudget budget, IOptions<SocialMeterOptions> options)
+    public SocialMeterController(ISocialMeterService meter, IScoreExplainer explainer, IPostQueries queries, LivePullBudget budget)
     {
         _meter = meter;
         _explainer = explainer;
         _queries = queries;
         _budget = budget;
-        _options = options.Value;
     }
 
     /// <summary>
@@ -45,11 +43,11 @@ public sealed class SocialMeterController : ControllerBase
             {
                 Status = 429,
                 Title = "Too many live refreshes",
-                Detail = $"Each reader gets {_options.MaxForcedRefreshesPerHourPerCaller} live refreshes an hour. The cached reading is still available without ?refresh."
+                Detail = $"Each reader gets {_budget.ForcedRefreshesPerHour} live refreshes an hour. The cached reading is still available without ?refresh."
             });
         }
 
-        var result = await _meter.GetScoreAsync(type, id, refresh, ct);
+        var result = await _meter.GetScoreAsync(type, id, refresh ? ReadTrigger.Button : ReadTrigger.Page, ct);
         return result is null ? NotFound() : Ok(result);
     }
 

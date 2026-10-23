@@ -449,6 +449,38 @@ namespace SocialMeter.Migrations
 
                     b.ToTable("TrackedTitles");
                 });
+
+            modelBuilder.Entity("SocialMeter.Domain.Models.UsageDay", b =>
+                {
+                    b.Property<DateOnly>("Day")
+                        .HasColumnType("date");
+
+                    b.Property<long>("ClaudeInputTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ClaudeOutputTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("EstimatedUsd")
+                        .HasPrecision(10, 4)
+                        .HasColumnType("decimal(10,4)");
+
+                    b.Property<int>("LivePulls")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("XPostsRead")
+                        .HasColumnType("int");
+
+                    b.Property<int>("XUsersRead")
+                        .HasColumnType("int");
+
+                    b.HasKey("Day");
+
+                    b.ToTable("UsageDays");
+                });
 #pragma warning restore 612, 618
         }
     }

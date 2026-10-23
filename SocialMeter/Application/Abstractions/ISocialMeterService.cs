@@ -3,10 +3,23 @@ using SocialMeter.Domain.Models;
 
 namespace SocialMeter.Application.Abstractions;
 
+/// <summary>Who asked for a reading. Stored in RefreshLogs.Trigger as "page", "button" or "watch".</summary>
+public enum ReadTrigger
+{
+    /// <summary>Someone opened the title; the sources are read only when the cached reading is stale.</summary>
+    Page,
+
+    /// <summary>Someone pressed Refresh: read now unless the title was read in the last few minutes.</summary>
+    Button,
+
+    /// <summary>A watch window's scheduled read (WatchWindowWorker); behaves like Refresh.</summary>
+    Watch
+}
+
 /// <summary>The reading for one title, refreshing from the social sources when it is due and allowed.</summary>
 public interface ISocialMeterService
 {
-    Task<SocialMeterResponseDto?> GetScoreAsync(MediaType mediaType, int tmdbId, bool forceRefresh, CancellationToken ct = default);
+    Task<SocialMeterResponseDto?> GetScoreAsync(MediaType mediaType, int tmdbId, ReadTrigger trigger, CancellationToken ct = default);
 }
 
 /// <summary>The numbers behind a cached reading. Never contacts the sources.</summary>

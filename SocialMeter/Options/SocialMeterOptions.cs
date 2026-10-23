@@ -18,12 +18,6 @@ public sealed class SocialMeterOptions
     /// <summary>How many posts the score endpoint returns inline.</summary>
     public int TopPosts { get; set; } = 12;
 
-    /// <summary>Process-wide ceiling on live pulls per hour. Beyond it, readers get the cached reading and a note saying why.</summary>
-    public int MaxLivePullsPerHour { get; set; } = 60;
-
-    /// <summary>Forced refreshes (?refresh=true) one caller may trigger per hour, by client address.</summary>
-    public int MaxForcedRefreshesPerHourPerCaller { get; set; } = 6;
-
     /// <summary>A tracked-set rebuild requested within this many minutes of the last one is answered from the last result.</summary>
     public int MinTrackedRefreshMinutes { get; set; } = 10;
 

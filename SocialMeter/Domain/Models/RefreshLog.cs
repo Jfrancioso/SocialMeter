@@ -18,13 +18,13 @@ public sealed class RefreshLog
     /// <summary>The title's name at the time, so a query reads without a TMDB lookup.</summary>
     public string TitleName { get; set; } = "";
 
-    /// <summary>"button" when a reader pressed Refresh; "page" when a page view found the title stale.</summary>
+    /// <summary>"button" when a reader pressed Refresh; "page" when a page view found the title stale; "watch" for a watch window's scheduled read.</summary>
     public string Trigger { get; set; } = "";
 
     /// <summary>Whether the sources were actually contacted (this is what spends X credits).</summary>
     public bool Pulled { get; set; }
 
-    /// <summary>pulled, cooldown, not-tracked or budget-reached.</summary>
+    /// <summary>pulled, cooldown, not-tracked, or the guardrail that refused a due pull: budget-reached (hourly), daily-cap, spend-limit, switched-off.</summary>
     public string Outcome { get; set; } = "";
 
     /// <summary>Posts the sources returned on this pull; null when nothing was pulled.</summary>

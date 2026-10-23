@@ -18,6 +18,7 @@ public class SocialMeterDbContext : DbContext
     public DbSet<RefreshLog> RefreshLogs => Set<RefreshLog>();
     public DbSet<ModerationAction> ModerationActions => Set<ModerationAction>();
     public DbSet<OutboundClickDay> OutboundClicks => Set<OutboundClickDay>();
+    public DbSet<UsageDay> UsageDays => Set<UsageDay>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -86,6 +87,12 @@ public class SocialMeterDbContext : DbContext
             entity.Property(e => e.Actor).IsRequired().HasMaxLength(200);
             entity.HasIndex(e => e.At).HasDatabaseName("IX_ModerationActions_At");
             entity.HasIndex(e => e.PostId).HasDatabaseName("IX_ModerationActions_PostId");
+        });
+
+        modelBuilder.Entity<UsageDay>(entity =>
+        {
+            entity.HasKey(e => e.Day);
+            entity.Property(e => e.EstimatedUsd).HasPrecision(10, 4);
         });
 
         modelBuilder.Entity<OutboundClickDay>(entity =>

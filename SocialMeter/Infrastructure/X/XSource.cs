@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Guardrails;
 using SocialMeter.Domain.Models;
 using SocialMeter.Options;
 
@@ -17,12 +18,14 @@ public sealed class XSource : ISocialSource
 {
     private readonly HttpClient _http;
     private readonly XOptions _options;
+    private readonly UsageMeter _usage;
     private readonly ILogger<XSource> _logger;
 
-    public XSource(HttpClient http, IOptions<XOptions> options, ILogger<XSource> logger)
+    public XSource(HttpClient http, IOptions<XOptions> options, UsageMeter usage, ILogger<XSource> logger)
     {
         _http = http;
         _options = options.Value;
+        _usage = usage;
         _logger = logger;
 
         var baseUrl = _options.BaseUrl.EndsWith('/') ? _options.BaseUrl : _options.BaseUrl + "/";
@@ -60,12 +63,15 @@ public sealed class XSource : ISocialSource
         using var res = await _http.GetAsync(url, ct);
         if (!res.IsSuccessStatusCode)
         {
+            // HttpRequestException carries the status, which is how the circuit breaker tells "out of credit" (402) and
+            // "slow down" (429) from a passing hiccup. X's own explanation ("credits depleted") is kept for the log.
             var body = await res.Content.ReadAsStringAsync(ct);
-            throw new InvalidOperationException($"X search failed ({(int)res.StatusCode}): {(body.Length > 200 ? body[..200] : body)}");
+            throw new HttpRequestException($"X search failed ({(int)res.StatusCode}): {(body.Length > 200 ? body[..200] : body)}", null, res.StatusCode);
         }
 
         var payload = await res.Content.ReadFromJsonAsync<XSearchResponse>(cancellationToken: ct);
         var tweets = payload?.Data ?? new List<XTweet>();
+        _usage.RecordX(tweets.Count, payload?.Includes?.Users?.Count ?? 0);
         var users = (payload?.Includes?.Users ?? new List<XUser>())
             .Where(u => u.Id is not null)
             .ToDictionary(u => u.Id!);
@@ -127,10 +133,13 @@ public sealed class XSource : ISocialSource
             var chunk = externalIds.Skip(i).Take(chunkSize).ToList();
             using var res = await _http.GetAsync($"tweets?ids={string.Join(',', chunk)}&tweet.fields=id", ct);
             if (!res.IsSuccessStatusCode)
-                throw new InvalidOperationException($"X lookup failed ({(int)res.StatusCode} {res.ReasonPhrase}).");
+                throw new HttpRequestException($"X lookup failed ({(int)res.StatusCode} {res.ReasonPhrase}).", null, res.StatusCode);
 
             var payload = await res.Content.ReadFromJsonAsync<XSearchResponse>(cancellationToken: ct);
             var alive = (payload?.Data ?? new List<XTweet>()).Select(t => t.Id).OfType<string>().ToHashSet();
+
+            // X bills every post a lookup returns, so the daily deletion check is a real cost (UsageMeter counts it).
+            _usage.RecordX(alive.Count, 0);
 
             foreach (var id in chunk.Where(id => !alive.Contains(id)))
                 removed.Add(id);

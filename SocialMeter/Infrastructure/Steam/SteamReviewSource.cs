@@ -1,4 +1,5 @@
-using System.Net.Http.Json;
+using System.Net;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Domain.Models;
@@ -16,6 +17,9 @@ public sealed class SteamReviewSource : ISocialSource
     private const string StoreBase = "https://store.steampowered.com/";
     private const int PerPage = 100;
     private const int Pages = 2;
+
+    // The same settings GetFromJsonAsync uses (case-insensitive, numbers may arrive as strings).
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _http;
     private readonly ILogger<SteamReviewSource> _logger;
@@ -43,7 +47,18 @@ public sealed class SteamReviewSource : ISocialSource
         {
             var url = StoreBase + $"appreviews/{title.TmdbId}?json=1&language=english&filter=recent&purchase_type=all" +
                       $"&num_per_page={PerPage}&cursor={Uri.EscapeDataString(cursor)}";
-            var dto = await _http.GetFromJsonAsync<ReviewsPage>(url, ct);
+            ReviewsPage? dto;
+            try
+            {
+                dto = await GetPageAsync(url, ct);
+            }
+            catch (HttpRequestException ex) when (page > 0)
+            {
+                // The first page is the freshest; if Steam stumbles on the second, keep what we have.
+                _logger.LogWarning("Steam: second page of reviews for {Title} failed ({Error}); keeping the first", title.Name, ex.Message);
+                break;
+            }
+
             if (dto is null || dto.Success != 1 || dto.Reviews is null || dto.Reviews.Count == 0)
                 break;
 
@@ -76,6 +91,22 @@ public sealed class SteamReviewSource : ISocialSource
 
         _logger.LogInformation("Steam: {Count} recent reviews for {Title}", results.Count, title.Name);
         return results;
+    }
+
+    /// <summary>
+    /// One page of reviews. Steam sometimes answers 200 OK with an HTML page instead of JSON when it is busy; that is
+    /// reported as "unavailable" so the circuit breaker can count it, rather than as a confusing JSON parse error.
+    /// </summary>
+    private async Task<ReviewsPage?> GetPageAsync(string url, CancellationToken ct)
+    {
+        using var res = await _http.GetAsync(url, ct);
+        res.EnsureSuccessStatusCode();
+
+        var body = await res.Content.ReadAsStringAsync(ct);
+        if (body.TrimStart().StartsWith('<'))
+            throw new HttpRequestException("Steam answered with a web page instead of reviews (it does this when busy).", null, HttpStatusCode.ServiceUnavailable);
+
+        return JsonSerializer.Deserialize<ReviewsPage>(body, Json);
     }
 
     /// <summary>

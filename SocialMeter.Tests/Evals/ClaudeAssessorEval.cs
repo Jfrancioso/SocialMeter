@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Guardrails;
 using SocialMeter.Application.Social;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Anthropic;
@@ -43,10 +44,16 @@ public class ClaudeAssessorEval
 
         var cases = JsonSerializer.Deserialize<List<EvalCase>>(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Evals", "cases.json")))!;
         var options = Microsoft.Extensions.Options.Options.Create(new AnthropicOptions { ApiKey = apiKey!, IncludeImages = false });
+        // The eval counts tokens like production does, so a run can report what it cost.
+        var guardrails = Microsoft.Extensions.Options.Options.Create(new GuardrailOptions());
+        var usage = new UsageMeter(guardrails, TimeProvider.System);
+        var breakers = new SourceBreakers(guardrails, new GuardrailLog(NullLogger<GuardrailLog>.Instance, TimeProvider.System), TimeProvider.System);
         var assessor = new ClaudePostAssessor(
             new AnthropicClient { ApiKey = apiKey },
             new LexiconPostAssessorFallback(new LexiconSentimentAnalyzer()),
             options,
+            usage,
+            breakers,
             NullLogger<ClaudePostAssessor>.Instance);
 
         var results = new List<CaseResult>();

@@ -21,20 +21,26 @@ public sealed class TitleTracker : ITitleTracker
     private readonly SocialMeterDbContext _db;
     private readonly ITitleService _titles;
     private readonly IMemoryCache _cache;
+    private readonly WatchWindows _windows;
     private readonly SocialMeterOptions _options;
     private readonly ILogger<TitleTracker> _logger;
 
-    public TitleTracker(SocialMeterDbContext db, ITitleService titles, IMemoryCache cache, IOptions<SocialMeterOptions> options, ILogger<TitleTracker> logger)
+    public TitleTracker(SocialMeterDbContext db, ITitleService titles, IMemoryCache cache, WatchWindows windows, IOptions<SocialMeterOptions> options, ILogger<TitleTracker> logger)
     {
         _db = db;
         _titles = titles;
         _cache = cache;
+        _windows = windows;
         _options = options.Value;
         _logger = logger;
     }
 
     public async Task<string?> GetReasonAsync(MediaType mediaType, int tmdbId, CancellationToken ct = default)
     {
+        // An open watch window tracks its title for the length of the event, whatever the lists say.
+        if (_windows.OpenFor(mediaType, tmdbId) is { } window)
+            return WatchWindows.ReasonFor(window);
+
         var set = await GetSetAsync(ct);
         return set.GetValueOrDefault((mediaType, tmdbId));
     }
@@ -44,7 +50,9 @@ public sealed class TitleTracker : ITitleTracker
         var set = await GetSetAsync(ct);
         foreach (var t in titles)
         {
-            t.TrackedReason = set.GetValueOrDefault((t.MediaType, t.TmdbId));
+            t.TrackedReason = _windows.OpenFor(t.MediaType, t.TmdbId) is { } window
+                ? WatchWindows.ReasonFor(window)
+                : set.GetValueOrDefault((t.MediaType, t.TmdbId));
             t.Tracked = t.TrackedReason is not null;
         }
     }

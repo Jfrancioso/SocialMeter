@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.Configure<AdminOptions>(configuration.GetSection(AdminOptions.SectionName));
         services.Configure<HomeOptions>(configuration.GetSection(HomeOptions.SectionName));
         services.AddCloudflareAccess(configuration);
+        services.AddTelemetry(configuration);
 
         services
             .AddControllers()
