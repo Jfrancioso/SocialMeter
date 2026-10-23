@@ -49,6 +49,14 @@ public sealed class HomeController : ControllerBase
         // Trending is always fetched: the hero falls back to it. Every other row is fetched only if Home:Rows lists it.
         var wanted = _home.Effective;
         var trendingTask = _titles.GetTrendingAsync(null, 1, ct);
+
+        // The rows below run in parallel, but this request's database context can run only one query at a time. So the
+        // reads from our own database that the signal rows need happen here first, one after another; the parallel part
+        // then only talks to TMDB and Steam (plus the October horror row, the one builder left that reads the database).
+        var crowdCritics = wanted.Contains("gaps") ? await _queries.GetCrowdCriticsAsync(ct) : Array.Empty<CrowdCritics>();
+        var (rising, falling) = wanted.Contains("heating_up") || wanted.Contains("cooling_off")
+            ? await MoversAsync(ct)
+            : (Array.Empty<Mover>(), Array.Empty<Mover>());
         var builders = new Dictionary<string, Func<Task<IReadOnlyList<HomeRowDto>>>>
         {
             ["trending"] = async () => Row("trending", "Trending now", "What the internet is talking about today", (await trendingTask).Items),
@@ -66,7 +74,7 @@ public sealed class HomeController : ControllerBase
         };
         builders["gaps"] = async () =>
         {
-            var gaps = HomeSignals.BiggestGaps(await _queries.GetCrowdCriticsAsync(ct), minPosts: 15, minConfidence: 0.5, minGap: 10, take: 12);
+            var gaps = HomeSignals.BiggestGaps(crowdCritics, minPosts: 15, minConfidence: 0.5, minGap: 10, take: 12);
             return Row("gaps", "Crowd vs critics", "Where the people and the critics disagree most",
                 await TitlesAsync(gaps.Select(g => (g.MediaType, g.TmdbId)), ct));
         };
@@ -74,7 +82,6 @@ public sealed class HomeController : ControllerBase
         if (wanted.Contains("heating_up") || wanted.Contains("cooling_off"))
             builders["movers"] = async () =>
             {
-                var (rising, falling) = await MoversAsync(ct);
                 return new[]
                 {
                     new HomeRowDto { Key = "heating_up", Title = "Heating up", Subtitle = "Crowd scores climbing day after day", Items = await TitlesAsync(rising.Select(m => (m.MediaType, m.TmdbId)), ct) },
