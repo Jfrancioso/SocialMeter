@@ -158,6 +158,10 @@ logging itself can never run up a bill (worst case about $3 a month over the fre
 
 ## Known gaps
 
+- **Credentials in URLs.** TMDB (with `Tmdb__ApiKey`), OMDb and Steam take their key in the query string. Telemetry
+  rewrites every query value to "Redacted" (`Web/Telemetry.cs`, since 2026-10-23; the first hour of data before that
+  held the TMDB and OMDb keys). Prefer `Tmdb__ReadAccessToken`, which travels in a header.
+
 - **Browser errors aren't recorded.** Telemetry is server-side only (privacy page). A broken page that still gets
   200s from the API won't alert.
 - **The website itself (Static Web Apps) has no uptime test**, only the API. A second test on https://chatterbub.com costs
