@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Caching.Memory;
 using SocialMeter.Domain.Models;
+using SocialMeter.Infrastructure.Trailers;
 
 namespace SocialMeter.Infrastructure.Steam;
 
@@ -255,6 +256,7 @@ public sealed class SteamClient
             Platforms = platforms,
             Status = d.TryGetProperty("release_date", out var rd2) && rd2.TryGetProperty("coming_soon", out var cs) && cs.GetBoolean() ? "Coming soon" : null,
             Homepage = Str("website"),
+            Trailer = TrailerPicker.FromSteam(d),
             MetacriticScore = metaScore,
             MetacriticUrl = metaUrl,
             SteamReviewPercent = pct,

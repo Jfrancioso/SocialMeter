@@ -37,6 +37,23 @@ public sealed class TmdbTitleItem
     [JsonPropertyName("genre_ids")] public List<int>? GenreIds { get; set; }
     public List<TmdbGenre>? Genres { get; set; }
     [JsonPropertyName("external_ids")] public TmdbExternalIds? ExternalIds { get; set; }
+    public TmdbVideos? Videos { get; set; }
+}
+
+public sealed class TmdbVideos
+{
+    public List<TmdbVideo>? Results { get; set; }
+}
+
+public sealed class TmdbVideo
+{
+    [JsonPropertyName("iso_639_1")] public string? Language { get; set; }
+    public string? Key { get; set; }
+    public string? Name { get; set; }
+    public string? Site { get; set; }
+    public string? Type { get; set; }
+    public bool Official { get; set; }
+    [JsonPropertyName("published_at")] public DateTimeOffset? PublishedAt { get; set; }
 }
 
 public sealed class TmdbGenre

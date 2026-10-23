@@ -25,6 +25,9 @@ public sealed class Title
     public string? ImdbId { get; init; }
     public string? Homepage { get; init; }
 
+    /// <summary>The trailer to offer on the title page: YouTube for movies and shows, Steam's own video for games.</summary>
+    public TitleTrailer? Trailer { get; init; }
+
     // Game-only fields (null for movies and shows)
     public string? Developer { get; init; }
 

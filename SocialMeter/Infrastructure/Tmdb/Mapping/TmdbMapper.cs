@@ -1,3 +1,4 @@
+using SocialMeter.Infrastructure.Trailers;
 using SocialMeter.Common.Parsing;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Tmdb.Dtos;
@@ -45,7 +46,8 @@ internal static class TmdbMapper
             EpisodeCount = r.NumberOfEpisodes,
             Status = r.Status,
             ImdbId = r.ImdbId ?? r.ExternalIds?.ImdbId,
-            Homepage = string.IsNullOrWhiteSpace(r.Homepage) ? null : r.Homepage
+            Homepage = string.IsNullOrWhiteSpace(r.Homepage) ? null : r.Homepage,
+            Trailer = TrailerPicker.FromTmdb(r.Videos?.Results)
         };
     }
 

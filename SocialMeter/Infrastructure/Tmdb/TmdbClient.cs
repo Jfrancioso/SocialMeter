@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Options;
 using SocialMeter.Domain.Models;
@@ -85,7 +85,8 @@ public sealed class TmdbClient
         EnsureConfigured();
         if (id <= 0) throw new ArgumentOutOfRangeException(nameof(id), "id must be > 0");
 
-        var url = WithKey($"{Segment(mediaType)}/{id}?append_to_response=external_ids");
+        // Videos ride along on the same request: trailers cost no extra call. English plus language-neutral uploads.
+        var url = WithKey($"{Segment(mediaType)}/{id}?append_to_response=external_ids,videos&include_video_language=en,null");
 
         using var res = await _http.GetAsync(url, ct);
         if (res.StatusCode == HttpStatusCode.NotFound)
