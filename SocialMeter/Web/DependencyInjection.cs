@@ -39,18 +39,20 @@ public static class DependencyInjection
             o.KnownProxies.Clear();
         });
 
-        // Per-client ceilings. The global one stops id enumeration from burning the TMDB/OMDb quotas; the "reads" policy
-        // is tighter on the endpoints that hand out bulk data, so harvesting the whole catalogue takes days, not minutes.
-        // Money is guarded separately by LivePullBudget; this is the plain request-rate guard.
+        // Per-client ceilings, a backstop rather than the main defence (see RateLimitOptions). They used to be 60 and 20 per
+        // minute, which a single visitor clicking through a few titles could hit (a home page is ~5 requests, a title page
+        // ~6), and which everyone behind one carrier or office address shared. Abuse is stopped by Cloudflare's edge rule;
+        // money is guarded by LivePullBudget.
+        var limits = configuration.GetSection(RateLimitOptions.SectionName).Get<RateLimitOptions>() ?? new RateLimitOptions();
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
                 RateLimitPartition.GetSlidingWindowLimiter(ClientKey(ctx),
-                    _ => new SlidingWindowRateLimiterOptions { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 4, QueueLimit = 0 }));
+                    _ => new SlidingWindowRateLimiterOptions { PermitLimit = Math.Max(1, limits.GlobalPerMinute), Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 4, QueueLimit = 0 }));
             options.AddPolicy(ReadsPolicy, ctx =>
                 RateLimitPartition.GetSlidingWindowLimiter(ClientKey(ctx),
-                    _ => new SlidingWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 4, QueueLimit = 0 }));
+                    _ => new SlidingWindowRateLimiterOptions { PermitLimit = Math.Max(1, limits.ReadsPerMinute), Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 4, QueueLimit = 0 }));
         });
 
         // Origins come from configuration (Cors:AllowedOrigins) so production is not hard-coded; no credentials until there is a session.

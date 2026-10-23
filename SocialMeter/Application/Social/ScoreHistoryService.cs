@@ -15,11 +15,13 @@ namespace SocialMeter.Application.Social;
 public sealed class ScoreHistoryService
 {
     private readonly SocialMeterDbContext _db;
+    private readonly PullGate _gate;
     private readonly SocialMeterOptions _options;
 
-    public ScoreHistoryService(SocialMeterDbContext db, IOptions<SocialMeterOptions> options)
+    public ScoreHistoryService(SocialMeterDbContext db, PullGate gate, IOptions<SocialMeterOptions> options)
     {
         _db = db;
+        _gate = gate;
         _options = options.Value;
     }
 
@@ -48,25 +50,15 @@ public sealed class ScoreHistoryService
         days = Math.Clamp(days, 7, 365);
         var today = DateOnly.FromDateTime(nowUtc);
 
-        var any = await _db.ScoreHistory.AnyAsync(h => h.TmdbId == tmdbId && h.MediaType == mediaType, ct);
-        if (!any)
-            await BackfillAsync(mediaType, tmdbId, nowUtc, ct);
-
-        var hasToday = await _db.ScoreHistory.AnyAsync(h => h.TmdbId == tmdbId && h.MediaType == mediaType && h.Day == today, ct);
-        if (!hasToday)
+        // Filling in missing rows writes, and two visitors (or a visitor and a live pull) can arrive for the same title at
+        // once; both would insert the same day and one would fail on the unique index. So the fill runs under the title's
+        // pull gate, taken only if it is free right now: if it is busy, this request just reads. Never wait for it, since
+        // a pull can hold it for half a minute; the pull records today's row itself and the next visit fills the rest.
+        using (var gate = _gate.TryAcquire(mediaType, tmdbId))
         {
-            var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == tmdbId && s.MediaType == mediaType, ct);
-            if (snapshot is not null && snapshot.TotalPosts > 0)
-            {
-                _db.ScoreHistory.Add(new ScoreHistory
-                {
-                    TmdbId = tmdbId, MediaType = mediaType, Day = today,
-                    Score = snapshot.Score, RawScore = snapshot.RawScore, EffectivePosts = snapshot.EffectivePosts,
-                    Margin = snapshot.Margin, TotalPosts = snapshot.TotalPosts, Reconstructed = false, RecordedAt = nowUtc
-                });
-            }
+            if (gate is not null)
+                await FillMissingAsync(mediaType, tmdbId, today, nowUtc, ct);
         }
-        await _db.SaveChangesAsync(ct);
 
         var since = today.AddDays(-days);
         var rows = await _db.ScoreHistory
@@ -106,6 +98,29 @@ public sealed class ScoreHistoryService
                 Change = trendRows.Count >= 2 ? trendRows[^1].Score - trendRows[0].Score : null
             }
         };
+    }
+
+    private async Task FillMissingAsync(MediaType mediaType, int tmdbId, DateOnly today, DateTime nowUtc, CancellationToken ct)
+    {
+        var any = await _db.ScoreHistory.AnyAsync(h => h.TmdbId == tmdbId && h.MediaType == mediaType, ct);
+        if (!any)
+            await BackfillAsync(mediaType, tmdbId, nowUtc, ct);
+
+        var hasToday = await _db.ScoreHistory.AnyAsync(h => h.TmdbId == tmdbId && h.MediaType == mediaType && h.Day == today, ct);
+        if (!hasToday)
+        {
+            var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == tmdbId && s.MediaType == mediaType, ct);
+            if (snapshot is not null && snapshot.TotalPosts > 0)
+            {
+                _db.ScoreHistory.Add(new ScoreHistory
+                {
+                    TmdbId = tmdbId, MediaType = mediaType, Day = today,
+                    Score = snapshot.Score, RawScore = snapshot.RawScore, EffectivePosts = snapshot.EffectivePosts,
+                    Margin = snapshot.Margin, TotalPosts = snapshot.TotalPosts, Reconstructed = false, RecordedAt = nowUtc
+                });
+            }
+        }
+        await _db.SaveChangesAsync(ct);
     }
 
     /// <summary>

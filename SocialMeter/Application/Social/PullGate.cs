@@ -24,6 +24,13 @@ public sealed class PullGate
         return new Releaser(semaphore);
     }
 
+    /// <summary>The gate if it is free right now, otherwise null. For work that can be skipped while a pull is under way.</summary>
+    public IDisposable? TryAcquire(MediaType mediaType, int tmdbId)
+    {
+        var semaphore = _gates.GetOrAdd((mediaType, tmdbId), _ => new SemaphoreSlim(1, 1));
+        return semaphore.Wait(0) ? new Releaser(semaphore) : null;
+    }
+
     private sealed class Releaser : IDisposable
     {
         private SemaphoreSlim? _semaphore;

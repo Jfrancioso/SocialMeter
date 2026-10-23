@@ -93,8 +93,9 @@ public sealed class SocialMeterController : ControllerBase
                 parsed.Add((type, id));
         }
 
-        if (parsed.Count > 60)
-            return BadRequest(new { error = "At most 60 keys per request." });
+        // A full home page is ~180 cards; one request should cover it.
+        if (parsed.Count > 200)
+            return BadRequest(new { error = "At most 200 keys per request." });
 
         return Ok(await _queries.GetSnapshotsAsync(parsed, ct));
     }
