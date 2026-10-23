@@ -33,7 +33,13 @@ public sealed class SocialMeterOptions
     /// Strength of the pull toward neutral, in effective posts (the k in the Bayesian average). With this many effective
     /// posts the data and the prior count equally; a title needs several times this to reach Electric or Cold.
     /// </summary>
-    public double PriorStrength { get; set; } = 6;
+    public double PriorStrength { get; set; } = 4;
+
+    /// <summary>
+    /// The day the scoring formula last changed (v2: tone and approval blended, substance in weights only, k = 4). History
+    /// charts mark it, and the trend test only uses days from it on, so the one-time step is not mistaken for a trend.
+    /// </summary>
+    public DateOnly? ScoringChangedOn { get; set; } = new DateOnly(2026, 10, 23);
 
     /// <summary>Floor on the per-post spread used for the margin of error, so unanimous posts never claim zero uncertainty. Sentiment units (−1..1).</summary>
     public double MinSigma { get; set; } = 0.2;

@@ -80,13 +80,16 @@ public sealed class ScoreHistoryService
         var smoothed = ScoreStatistics.Ewma(points.Select(p => (double)p.Score).ToList(), 0.3);
         for (var i = 0; i < points.Count; i++) points[i].Smoothed = Math.Round(smoothed[i], 1);
 
-        var trendRows = rows.Where(r => r.Day > today.AddDays(-_options.TrendWindowDays)).ToList();
+        // Days scored by an older formula are shown but not tested for a trend: the change itself would read as one.
+        var changedOn = _options.ScoringChangedOn;
+        var trendRows = rows.Where(r => r.Day > today.AddDays(-_options.TrendWindowDays) && (changedOn is null || r.Day >= changedOn)).ToList();
         var series = trendRows.Select(r => ((double)r.Day.DayNumber, (double)r.Score)).ToList();
         var test = ScoreStatistics.MannKendall(series, _options.TrendAlpha, _options.MinTrendPoints);
 
         return new ScoreHistoryDto
         {
             Points = points,
+            MethodChangedOn = changedOn is { } c && rows.Count > 0 && rows[0].Day < c ? c : null,
             Trend = new TrendDto
             {
                 Direction = test.Direction,

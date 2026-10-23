@@ -74,9 +74,10 @@ public class ScoringTests
     [Fact]
     public void Confidence_grows_with_trust_weighted_volume()
     {
-        var few = SocialScoreCalculator.Compute(Enumerable.Range(0, 4).Select(_ => P(0.5)).ToList(), Now);
+        // With k = 4, confidence n/(n+4) is low below four effective posts.
+        var few = SocialScoreCalculator.Compute(Enumerable.Range(0, 3).Select(_ => P(0.5)).ToList(), Now);
         var many = SocialScoreCalculator.Compute(Enumerable.Range(0, 40).Select(_ => P(0.5)).ToList(), Now);
-        var manyWeak = SocialScoreCalculator.Compute(Enumerable.Range(0, 40).Select(_ => P(0.5, trust: 0.1)).ToList(), Now);
+        var manyWeak = SocialScoreCalculator.Compute(Enumerable.Range(0, 40).Select(_ => P(0.5, trust: 0.08)).ToList(), Now);
         Assert.Equal("low", few.ConfidenceLabel);
         Assert.Equal("high", many.ConfidenceLabel);
         Assert.Equal("low", manyWeak.ConfidenceLabel);
@@ -87,11 +88,12 @@ public class ScoringTests
     {
         var few = SocialScoreCalculator.Compute(Enumerable.Range(0, 3).Select(_ => P(0.9)).ToList(), Now);
         var many = SocialScoreCalculator.Compute(Enumerable.Range(0, 60).Select(_ => P(0.9)).ToList(), Now);
-        Assert.True(few.Score < 70, $"three posts scored {few.Score}");
+        // Three glowing posts: raw 98 (tone 0.9 and approval 1 blended), pulled about 28 points toward 50 by k = 4.
+        Assert.True(few.Score <= 72, $"three posts scored {few.Score}");
         Assert.True(many.Score > 85, $"sixty posts scored {many.Score}");
         Assert.True(few.Stats.Margin > many.Stats.Margin);
-        Assert.True(few.Stats.PriorPull < 0, "the prior should have pulled a glowing trio down");
-        Assert.Equal(95, few.Stats.RawScore);
+        Assert.True(few.Stats.PriorPull <= -20, $"the prior should have pulled a glowing trio well down, pulled {few.Stats.PriorPull}");
+        Assert.Equal(98, few.Stats.RawScore);
         Assert.Equal(few.Score - few.Stats.Margin, few.Stats.Lower);
     }
 
@@ -102,6 +104,41 @@ public class ScoringTests
         var dominated = SocialScoreCalculator.Compute(Enumerable.Range(0, 10).Select(_ => P(0.5)).Append(P(0.5, upvotes: 1_000_000)).ToList(), Now);
         Assert.True(weak.Stats.EffectivePosts < 5, $"forty weak posts counted as {weak.Stats.EffectivePosts}");
         Assert.True(dominated.Stats.EffectivePosts < 10, $"one viral post among ten counted as {dominated.Stats.EffectivePosts}");
+    }
+
+    [Fact]
+    public void Approval_counts_so_a_mild_but_unanimous_crowd_reads_as_liked()
+    {
+        // Twenty posts that all liked it but said so mildly (+0.3): tone alone would read 65 before any pull toward 50.
+        var m = SocialScoreCalculator.Compute(Enumerable.Range(0, 20).Select(_ => P(0.3)).ToList(), Now);
+        Assert.Equal(83, m.Stats.RawScore);       // 50 + 50 * (0.5 * 0.3 + 0.5)
+        Assert.Equal("Hot", m.Label);
+    }
+
+    [Fact]
+    public void Neutral_posts_count_as_zero_and_pull_toward_fifty()
+    {
+        var liked = Enumerable.Range(0, 10).Select(_ => P(0.9)).ToList();
+        var lukewarm = Enumerable.Range(0, 10).Select(_ => P(0.1)).ToList();   // +0.1 is labelled neutral
+        var m = SocialScoreCalculator.Compute(liked.Concat(lukewarm).ToList(), Now);
+        Assert.Equal(74, m.Stats.RawScore);       // half the weight at 0.95, half at 0
+    }
+
+    [Fact]
+    public void Substance_sets_weight_but_does_not_shrink_effective_posts()
+    {
+        var bare = SocialScoreCalculator.Compute(Enumerable.Range(0, 20).Select(_ => P(0.9, substance: 0.1)).ToList(), Now);
+        var detailed = SocialScoreCalculator.Compute(Enumerable.Range(0, 20).Select(_ => P(0.9, substance: 0.9)).ToList(), Now);
+        Assert.Equal(detailed.Stats.EffectivePosts, bare.Stats.EffectivePosts);
+        Assert.Equal(detailed.Score, bare.Score);
+        Assert.Equal(20, bare.Stats.EffectivePosts);
+    }
+
+    [Fact]
+    public void A_split_crowd_stays_near_fifty()
+    {
+        var posts = Enumerable.Range(0, 15).Select(_ => P(0.7)).Concat(Enumerable.Range(0, 15).Select(_ => P(-0.7))).ToList();
+        Assert.InRange(SocialScoreCalculator.Compute(posts, Now).Score, 48, 52);
     }
 
     [Fact]

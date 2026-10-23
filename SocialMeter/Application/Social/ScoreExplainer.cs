@@ -99,7 +99,7 @@ public sealed class ScoreExplainer : IScoreExplainer
         if (meter.Stats.EffectivePosts < k)
             notes.Add($"Fewer than {k:0} effective posts, so the neutral prior still carries {1 - meter.Confidence:P0} of the score.");
         if (meter.Stats.PriorPull != 0)
-            notes.Add($"The raw weighted mean is {meter.Stats.RawScore}; the pull toward neutral moved it {Math.Abs(meter.Stats.PriorPull)} point{(Math.Abs(meter.Stats.PriorPull) == 1 ? "" : "s")} {(meter.Stats.PriorPull > 0 ? "up" : "down")}.");
+            notes.Add($"The raw blend of tone and approval is {meter.Stats.RawScore}; the pull toward neutral moved it {Math.Abs(meter.Stats.PriorPull)} point{(Math.Abs(meter.Stats.PriorPull) == 1 ? "" : "s")} {(meter.Stats.PriorPull > 0 ? "up" : "down")}.");
         if (drivers.Count > 0 && drivers[0].WeightShare >= 20)
             notes.Add($"One post carries {drivers[0].WeightShare:0}% of the weight.");
         var detailed = mix.Single(m => m.Level == "detailed");

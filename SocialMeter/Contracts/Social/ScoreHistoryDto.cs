@@ -4,6 +4,9 @@ public sealed class ScoreHistoryDto
 {
     public IReadOnlyList<ScorePointDto> Points { get; init; } = Array.Empty<ScorePointDto>();
     public TrendDto Trend { get; init; } = new();
+
+    /// <summary>The day the scoring formula changed, when it falls inside this series; the chart marks it.</summary>
+    public DateOnly? MethodChangedOn { get; init; }
 }
 
 public sealed class ScorePointDto

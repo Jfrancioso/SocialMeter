@@ -88,6 +88,24 @@ public static class SocialScoreCalculator
     public static double? Share(SocialPost post, double totalWeight, DateTime nowUtc)
         => totalWeight > 0 ? 100 * Weight(post, nowUtc) / totalWeight : null;
 
+    /// <summary>
+    /// What one post says, from −1 to +1: half its tone (how strongly the author feels, −1..1) and half its verdict (+1 liked it,
+    /// −1 disliked it). A neutral post is a mixed or lukewarm reaction and counts 0 on both halves. Averaging these per post is
+    /// the same as blending the title's weighted tone and its weighted approval 50/50: approval says how many liked it, tone
+    /// how strongly, so a near-unanimous rave reads as one even though few posts are worded at full strength. (Scoring v2,
+    /// 2026-10-23; v1 averaged tone alone.)
+    /// </summary>
+    public static double Value(SocialPost post)
+    {
+        var tone = Math.Clamp(post.SentimentScore, -1, 1);
+        return post.Sentiment switch
+        {
+            Sentiment.Positive => 0.5 * tone + 0.5,
+            Sentiment.Negative => 0.5 * tone - 0.5,
+            _ => 0
+        };
+    }
+
     /// <summary>The fraction of a full post this one is worth on trust and substance alone (0–1).</summary>
     public static double Credit(SocialPost post)
         => Math.Clamp(post.TrustWeight, 0, 1) * (0.5 + 0.5 * Math.Clamp(post.Substance, 0, 1));
@@ -99,11 +117,13 @@ public static class SocialScoreCalculator
     {
         if (posts.Count == 0) return new Reading(50, 50, 0, 50, 0);
 
-        var items = posts.Select(p => (p.SentimentScore, Weight(p, nowUtc))).ToList();
+        var items = posts.Select(p => (Value(p), Weight(p, nowUtc))).ToList();
         var summary = ScoreStatistics.Summarize(items);
 
-        // Kish answers "how many equal posts is this weight profile worth"; the average credit answers "how much of a post is each one".
-        var effective = summary.KishN * posts.Average(Credit);
+        // Kish answers "how many equal posts is this weight profile worth"; the average trust answers "how much of a post is
+        // each one". Substance already sets each post's weight, so it no longer shrinks this count as well: that penalised a
+        // chorus of short, genuine reactions twice and pulled a near-unanimous score toward 50.
+        var effective = summary.KishN * posts.Average(p => Math.Clamp(p.TrustWeight, 0, 1));
 
         var shrunkMean = ScoreStatistics.Shrink(summary.Mean, effective, prior: 0, k: prm.PriorStrength);
         var shrinkFactor = prm.PriorStrength <= 0 ? 1 : effective / (effective + prm.PriorStrength);
