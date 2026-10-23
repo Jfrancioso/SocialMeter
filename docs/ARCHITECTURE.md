@@ -56,7 +56,7 @@ The rest:
 | Folder | Classes | Responsibility |
 |---|---|---|
 | `Guardrails/` | `LivePullBudget`, `UsageMeter` (+ `UsageMeterWorker`), `SourceBreakers`, `GuardrailLog`, `GuardrailStatusService` | Bound the bill and report on it: the one door for paid pulls (kill switch, daily spend limit, daily and hourly caps), today's usage, a circuit breaker per outside service, the log line the alerts search for, the admin page's view. See OPERATIONS.md. |
-| `Home/` | `HomeFeedService`, `HomeLayout`, `HomeSignals`, `FeaturedPick`, `SearchSuggestions` | The home page and the search suggestions; pure rules for rows, the hero, crowd-vs-critics and movers. |
+| `Home/` | `HomeFeedService` (+ `HomeWarmupWorker`), `HomeLayout`, `HomeSignals`, `FeaturedPick`, `SearchSuggestions` | The home page and the search suggestions, rebuilt in the background every 4 minutes so no visitor waits for a build; pure rules for rows, the hero, crowd-vs-critics and movers. |
 | `Tracking/` | `TitleTracker`, `WatchWindows` (+ `WatchWindowWorker`), `SeasonalTheme` | Which titles may be pulled; scheduled reads during an event. |
 | `Ratings/` | `CriticsBaseline`, `CriticsScores` (+ `CriticsRefreshWorker`) | The critics number (Rotten Tomatoes + Metacritic only) stored on snapshots. |
 | `Moderation/` | `ModerationService`, `PostModeration` | Hide and restore posts, logged in `ModerationActions`. |
