@@ -20,6 +20,10 @@ concurrency:
   group: deploy-api
   cancel-in-progress: false
 
+# The workflow token can only read the repository; Azure is reached with its own secret, not this token.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

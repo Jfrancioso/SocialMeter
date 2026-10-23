@@ -9,6 +9,10 @@ on:
   pull_request:
     branches: [main]
 
+# The workflow token can only read the repository; nothing here writes back to GitHub.
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest

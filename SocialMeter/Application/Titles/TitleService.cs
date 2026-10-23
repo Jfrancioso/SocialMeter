@@ -95,7 +95,9 @@ public sealed class TitleService : ITitleService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "Steam search failed for {Query}; returning TMDB results only", query);
+            // The query is visitor input: line breaks out, so it can't fake extra log lines.
+            _logger.LogWarning(ex, "Steam search failed for {Query}; returning TMDB results only",
+                query.Replace('\r', ' ').Replace('\n', ' '));
             return tmdb;
         }
     }
