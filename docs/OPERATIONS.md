@@ -23,6 +23,9 @@ spending. DEPLOY.md covers how the pieces are deployed; this covers keeping them
 | App Service health check | the same path from inside Azure, every minute | it fails for more than half of 10 minutes | `chatterbub-api-unhealthy` (severity 1) |
 | Server errors | HTTP 5xx answers and errors logged by the app | more than 5 in 15 minutes | `chatterbub-server-errors` (severity 1) |
 | Guardrails | the log line `Guardrail tripped: {Guardrail}` | any trip except the hourly cap; one alert per guardrail | `chatterbub-guardrails` (severity 2) |
+| Access granted | Azure's activity log, whole subscription | anyone is given a role anywhere | `chatterbub-access-changed` |
+| Settings changed | Azure's activity log, socialmeter-jf-rg | app settings, deploy credentials or the publish profile, deploy identities, custom domains, database firewall, Key Vault, the alert email | `chatterbub-app-changed` |
+| Something deleted | Azure's activity log, socialmeter-jf-rg | the app, plan, database, Key Vault, monitoring or any alert rule | `chatterbub-resource-deleted` |
 
 The error and guardrail rules stay quiet for an hour after they fire, so a bad evening is a few emails, not a flood.
 A deploy restarts the app for about 30 seconds; the thresholds above are set so that alone doesn't email you.
@@ -44,6 +47,13 @@ A deploy restarts the app for about 30 seconds; the thresholds above are set so 
 The email's **View results** link shows which requests failed. For the stack trace:
 Azure portal > `socialmeter-jf-ai` > **Failures** > **Exceptions**, pick the exception, then **Suggested** or
 **All** to see the full trace with the line numbers. Or run the "Recent errors" query below in **Logs**.
+
+### "chatterbub-access-changed", "chatterbub-app-changed" or "chatterbub-resource-deleted"
+
+Someone changed the Azure setup. If it was you (or Claude, on a day you asked for changes), ignore it. If not, treat it as
+a possible stolen login: sign in to the Azure portal, open **Activity log** to see who did what, remove any access you
+don't recognise (**Access control (IAM)**), change your Microsoft account password, and check that two-factor is on.
+Changing app settings restarts the app, so an unexpected restart in the uptime log can be the same event.
 
 ### "Chatterbub: guardrail tripped"
 

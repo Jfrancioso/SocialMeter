@@ -52,7 +52,19 @@ Manual deploy of the current `main`: Actions → Deploy → Run workflow.
 | Secrets | GitHub secret scanning with push protection, both repos | A push containing a known token format is blocked |
 
 Dependabot version bumps wait 14 days after a release (`cooldown` in `dependabot.yml`); security fixes do not wait. The
-ZAP scan is passive only. Never run an active scan against production: it sends attack payloads, spends the refresh
+ZAP scan is passive only.
+
+Hardening added 2026-10-23:
+
+| Protection | Where | Notes |
+|---|---|---|
+| Actions pinned to commits | every workflow, both repos | `uses: owner/action@<commit> # vX.Y.Z`. A tag can be moved by its owner, a commit cannot. Dependabot (github-actions) updates the pins. The Static Web Apps action still pulls Microsoft's container image at run time. |
+| `main` protected | both repos | No force pushes, no deletion, admins included. Direct pushes still work. |
+| Cloudflare Free Managed Ruleset | zone chatterbub.com, WAF → Managed rules | Blocks known high-impact exploit patterns at the edge. |
+| Scanner-path block | zone custom rule "Scanner paths..." | `/.anything` (except `/.well-known/`), `.env`, `.git`, `*.php`, `appsettings.json`, `config.json` and friends answer 403 at Cloudflare and never reach Azure. |
+| DNSSEC | Cloudflare DNS (registrar is Cloudflare, so the DS record is published automatically) | Stops forged DNS answers for chatterbub.com. |
+| SPF `v=spf1 -all` and DMARC `p=reject` | apex and `_dmarc` TXT records | The domain sends no mail, so mail claiming to be from it is rejected. **When Cloudflare Email Routing is turned on for privacy@, merge its SPF include into the same record** (one SPF record per name). |
+| Azure change alerts | activity-log alerts `chatterbub-access-changed`, `chatterbub-app-changed`, `chatterbub-resource-deleted` | Email when access is granted, app settings or deploy credentials change, or anything is deleted (OPERATIONS.md). Free. | Never run an active scan against production: it sends attack payloads, spends the refresh
 budget and writes to the database. Run one against a local copy if needed.
 
 ## Configuration in production
