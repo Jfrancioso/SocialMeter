@@ -28,6 +28,9 @@ spending. DEPLOY.md covers how the pieces are deployed; this covers keeping them
 | Something deleted | Azure's activity log, socialmeter-jf-rg | the app, plan, database, Key Vault, monitoring or any alert rule | `chatterbub-resource-deleted` |
 
 The error and guardrail rules stay quiet for an hour after they fire, so a bad evening is a few emails, not a flood.
+The three change alerts send one email per change: they match only "Succeeded" events (Azure also logs "Started"), and
+they do not watch `publishxml` (reading the publish profile), which every OIDC deploy does and which is harmless now
+that password deploys are off. A routine deploy sends no change email.
 A deploy restarts the app for about 30 seconds; the thresholds above are set so that alone doesn't email you.
 
 ## When an email arrives
