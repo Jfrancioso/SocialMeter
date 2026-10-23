@@ -150,7 +150,7 @@ Three pieces fix that (2026-10-23):
 - **The app sets the same title and description** once it loads (`utils/pageMeta.js`), because search engines read the
   page again after JavaScript runs. Keep `titleMeta` there and `describeTitle` in the Worker in step.
 
-Search Console and Bing Webmaster Tools are verified on the domain (DNS TXT record in Cloudflare) and have the sitemap.
+Search Console and Bing Webmaster Tools: verify the domain with the DNS TXT record each one gives (added in Cloudflare), then submit https://chatterbub.com/sitemap.xml. Pending as of 2026-10-23.
 
 ## Operator actions in production
 
