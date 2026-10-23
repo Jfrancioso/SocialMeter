@@ -130,6 +130,21 @@ on Opus). `Bluesky__MaxResults` is the cost dial. Revoke the app password in Blu
 The live check `dotnet test SocialMeter.Tests --filter "FullyQualifiedName~BlueskyLiveCheck"` signs in with the local
 user secrets and fetches one title without touching X or Claude.
 
+### Tried and dropped: smaller batches with prompt caching (2026-10-23)
+
+A live refresh reads new posts in batches of 20, up to four batches at once, and takes about 20-25 s, almost all of
+it Claude's slowest batch. Batches of 10 with the instructions prompt-cached (the first batch starting alone so the
+rest could read its cache) were measured head to head on the same 56 Bluesky posts about Whalefall:
+
+| Setup | Time | Claude cost |
+|---|---|---|
+| 20 per batch, no cache (kept) | 14.8 s | $0.386 |
+| 10 per batch, cached | 16.6 s | $0.381 |
+
+Cost was flat and the verdicts agreed on 55 of 56 posts, but it was slower: the instructions are only ~1,600 tokens, so
+caching saves little, and per-request time is dominated by images and fixed overhead rather than the number of posts.
+Not worth the extra moving parts.
+
 ## Refresh log
 
 Every Refresh press, and every page view that triggers a live pull, adds a row to `RefreshLogs`: time (UTC), title,
