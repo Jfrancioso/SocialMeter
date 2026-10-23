@@ -35,8 +35,9 @@ public static class Telemetry
             o.Filter = context => !context.Request.Path.StartsWithSegments("/api/health");
             o.EnrichWithHttpRequest = (activity, request) =>
             {
+                // Application Insights joins the path and this tag as they are, so the tag keeps its leading "?".
                 if (request.QueryString.HasValue)
-                    activity.SetTag("url.query", RedactQuery(request.QueryString.Value));
+                    activity.SetTag("url.query", "?" + RedactQuery(request.QueryString.Value));
             };
         });
 
