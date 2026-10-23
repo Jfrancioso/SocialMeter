@@ -53,7 +53,9 @@ public sealed class TitleTracker : ITitleTracker
     {
         var theme = SeasonalTheme.For(DateTime.UtcNow);
         var movies = await _titles.DiscoverByGenreAsync(MediaType.Movie, theme.MovieGenreId, 1, ct);
-        var shows = await _titles.DiscoverByGenreAsync(MediaType.Tv, theme.TvGenreId, 1, ct);
+        var shows = theme.TvKeywordId is { } keyword
+            ? await _titles.DiscoverTvByKeywordAsync(keyword, 1, ct)
+            : await _titles.DiscoverByGenreAsync(MediaType.Tv, theme.TvGenreId, 1, ct);
 
         // Interleave so the row isn't all movies then all shows.
         var items = movies.Items.Take(12).Zip(shows.Items.Take(8).Concat(Enumerable.Repeat<Title?>(null, 12)), (m, s) => new[] { m, s })

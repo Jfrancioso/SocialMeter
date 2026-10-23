@@ -1,4 +1,5 @@
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Events;
 using SocialMeter.Application.Moderation;
 using SocialMeter.Application.Ratings;
 using SocialMeter.Application.Social;
@@ -28,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<DeletionSyncService>();
         services.AddScoped<TitleRecomputer>();
         services.AddScoped<ModerationService>();
+        services.AddScoped<OutboundClicks>();
 
         // Policies and guards: stateless or process-wide, so singletons.
         services.AddSingleton<TrustPolicy>();

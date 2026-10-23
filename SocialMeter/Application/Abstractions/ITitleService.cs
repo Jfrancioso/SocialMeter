@@ -17,6 +17,9 @@ public interface ITitleService
     Task<PagedResult<Title>> GetUpcomingAsync(string region, int page = 1, CancellationToken ct = default);
     Task<PagedResult<Title>> DiscoverByGenreAsync(MediaType mediaType, int genreId, int page = 1, CancellationToken ct = default);
 
+    /// <summary>Shows tagged with a TMDB keyword, most popular first.</summary>
+    Task<PagedResult<Title>> DiscoverTvByKeywordAsync(int keywordId, int page = 1, CancellationToken ct = default);
+
     /// <summary>Movies in a genre released in the last <paramref name="days"/> days, most popular first.</summary>
     Task<PagedResult<Title>> DiscoverRecentMoviesByGenreAsync(int genreId, int days, int page = 1, CancellationToken ct = default);
 

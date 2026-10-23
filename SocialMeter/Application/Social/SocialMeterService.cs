@@ -65,7 +65,7 @@ public sealed class SocialMeterService : ISocialMeterService
         using var _ = await _gate.AcquireAsync(mediaType, tmdbId, ct);
 
         var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == tmdbId && s.MediaType == mediaType, ct);
-        var (pull, sourceStatus, outcome) = await DecideAndPullAsync(title, snapshot, tracked, forceRefresh, now, ct);
+        var (pull, sourceStatus, outcome, paused) = await DecideAndPullAsync(title, snapshot, tracked, forceRefresh, now, ct);
 
         var posts = await _db.SocialPosts.Where(p => p.TmdbId == tmdbId && p.MediaType == mediaType).ToListAsync(ct);
         if (pull)
@@ -97,14 +97,22 @@ public sealed class SocialMeterService : ISocialMeterService
             Meter = meter,
             TopPosts = top,
             Sources = sourceStatus,
-            LastRefreshedAt = snapshot?.LastRefreshedAt ?? now,
+            // A title the sources were never read for has no "last refreshed" time: inventing one ("updated just now") made a
+            // paused or skipped read look like a finished one that found nothing.
+            LastRefreshedAt = snapshot?.LastRefreshedAt,
+            ReadsPaused = paused,
             FromCache = !pull,
-            NextRefreshAllowedAt = (snapshot?.LastRefreshedAt ?? now).AddMinutes(_options.MinForcedRefreshMinutes)
+            NextRefreshAllowedAt = paused
+                ? now + LivePullBudget.RefillEvery
+                : snapshot?.LastRefreshedAt.AddMinutes(_options.MinForcedRefreshMinutes)
         };
     }
 
-    /// <summary>Whether to pull now, the per-source outcome either way, and the outcome word for the refresh log.</summary>
-    private async Task<(bool Pulled, List<SourceStatusDto> Status, string Outcome)> DecideAndPullAsync(Title title, TitleSnapshot? snapshot, bool tracked, bool forceRefresh, DateTime now, CancellationToken ct)
+    /// <summary>
+    /// Whether to pull now, the per-source outcome either way, the outcome word for the refresh log, and whether a due pull
+    /// was turned away by the hourly budget.
+    /// </summary>
+    private async Task<(bool Pulled, List<SourceStatusDto> Status, string Outcome, bool Paused)> DecideAndPullAsync(Title title, TitleSnapshot? snapshot, bool tracked, bool forceRefresh, DateTime now, CancellationToken ct)
     {
         var sinceRefresh = snapshot is null ? TimeSpan.MaxValue : now - snapshot.LastRefreshedAt;
         var stale = sinceRefresh > TimeSpan.FromHours(_options.RefreshAfterHours);
@@ -112,17 +120,17 @@ public sealed class SocialMeterService : ISocialMeterService
         var decision = PullPolicy.Decide(tracked, stale, forceRefresh, recentlyPulled);
 
         if (decision != PullDecision.Pull)
-            return (false, Idle(null), PullPolicy.OutcomeName(decision, budgetRefused: false));
+            return (false, Idle(null), PullPolicy.OutcomeName(decision, budgetRefused: false), false);
 
         if (!_budget.TryAcquirePull())
         {
             // The hourly ceiling is the last line against a runaway bill; the reader sees the cache and the reason.
             _logger.LogWarning("Live pull budget exhausted; serving cached reading for {Type} {Id}", title.MediaType, title.TmdbId);
-            return (false, Idle("Live reads paused: hourly budget reached"), PullPolicy.OutcomeName(decision, budgetRefused: true));
+            return (false, Idle("Live reads paused: hourly budget reached"), PullPolicy.OutcomeName(decision, budgetRefused: true), true);
         }
 
         var status = await _ingestion.IngestAllAsync(_sources, title, now, ct);
-        return (true, status, PullPolicy.OutcomeName(decision, budgetRefused: false));
+        return (true, status, PullPolicy.OutcomeName(decision, budgetRefused: false), false);
     }
 
     /// <summary>

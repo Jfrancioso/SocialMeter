@@ -48,6 +48,9 @@ public sealed class TitleService : ITitleService
             ? Task.FromResult(new PagedResult<Title>(Array.Empty<Title>(), page, 0, 0))
             : _tmdb.DiscoverByGenreAsync(mediaType, genreId, page, ct);
 
+    public Task<PagedResult<Title>> DiscoverTvByKeywordAsync(int keywordId, int page = 1, CancellationToken ct = default)
+        => _tmdb.DiscoverTvByKeywordAsync(keywordId, page, ct);
+
     public Task<PagedResult<Title>> DiscoverRecentMoviesByGenreAsync(int genreId, int days, int page = 1, CancellationToken ct = default)
         => _tmdb.DiscoverRecentMoviesByGenreAsync(genreId, days, page, ct);
 

@@ -11,6 +11,9 @@ namespace SocialMeter.Application.Social;
 /// </summary>
 public sealed class LivePullBudget : IDisposable
 {
+    /// <summary>How often the hourly budget hands back a pull; a turned-away reader can try again after this.</summary>
+    public static readonly TimeSpan RefillEvery = TimeSpan.FromMinutes(5);
+
     private readonly TokenBucketRateLimiter _global;
     private readonly PartitionedRateLimiter<string> _perCaller;
 
@@ -22,7 +25,7 @@ public sealed class LivePullBudget : IDisposable
         {
             TokenLimit = perHour,
             TokensPerPeriod = Math.Max(1, perHour / 12),
-            ReplenishmentPeriod = TimeSpan.FromMinutes(5),
+            ReplenishmentPeriod = RefillEvery,
             QueueLimit = 0,
             AutoReplenishment = true
         });

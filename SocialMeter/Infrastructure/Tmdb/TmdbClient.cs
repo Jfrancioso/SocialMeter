@@ -51,6 +51,9 @@ public sealed class TmdbClient
     public Task<PagedResult<Title>> DiscoverByGenreAsync(MediaType mediaType, int genreId, int page, CancellationToken ct)
         => GetListAsync($"discover/{Segment(mediaType)}?with_genres={genreId}&sort_by=popularity.desc&include_adult=false&vote_count.gte=50", mediaType, page, ct);
 
+    public Task<PagedResult<Title>> DiscoverTvByKeywordAsync(int keywordId, int page, CancellationToken ct)
+        => GetListAsync($"discover/tv?with_keywords={keywordId}&sort_by=popularity.desc&include_adult=false&vote_count.gte=50", MediaType.Tv, page, ct);
+
     /// <summary>Movies in a genre released in the last <paramref name="days"/> days, most popular first: "what's hot in horror right now".</summary>
     public Task<PagedResult<Title>> DiscoverRecentMoviesByGenreAsync(int genreId, int days, int page, CancellationToken ct)
     {

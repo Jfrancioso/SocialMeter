@@ -19,13 +19,23 @@ public sealed class SocialMeterResponseDto
 
     public IReadOnlyList<SourceStatusDto> Sources { get; init; } = Array.Empty<SourceStatusDto>();
 
-    public DateTime LastRefreshedAt { get; init; }
+    /// <summary>When the sources were last read for this title; null when they never have been.</summary>
+    public DateTime? LastRefreshedAt { get; init; }
+
+    /// <summary>
+    /// True when a read was due but the hourly ceiling on live reads turned it away. The page says so instead of
+    /// presenting the old (or empty) reading as fresh; reads resume within <see cref="NextRefreshAllowedAt"/>.
+    /// </summary>
+    public bool ReadsPaused { get; init; }
 
     /// <summary>True when this reading came straight from the cache without contacting the sources.</summary>
     public bool FromCache { get; init; }
 
-    /// <summary>Earliest time a forced refresh will contact the sources again (see SocialMeter:MinForcedRefreshMinutes).</summary>
-    public DateTime NextRefreshAllowedAt { get; init; }
+    /// <summary>
+    /// Earliest time a forced refresh will contact the sources again: the cool-down after a read (see
+    /// SocialMeter:MinForcedRefreshMinutes), or the budget's next refill while reads are paused. Null when nothing blocks one.
+    /// </summary>
+    public DateTime? NextRefreshAllowedAt { get; init; }
 }
 
 public sealed class SocialPostDto

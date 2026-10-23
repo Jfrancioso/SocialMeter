@@ -74,6 +74,39 @@ namespace SocialMeter.Migrations
                     b.ToTable("ModerationActions");
                 });
 
+            modelBuilder.Entity("SocialMeter.Domain.Models.OutboundClickDay", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Count")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("Day")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Host")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Day", "Kind", "Host")
+                        .IsUnique()
+                        .HasDatabaseName("UX_OutboundClicks_Day_Kind_Host");
+
+                    b.ToTable("OutboundClicks", (string)null);
+                });
+
             modelBuilder.Entity("SocialMeter.Domain.Models.RefreshLog", b =>
                 {
                     b.Property<long>("Id")

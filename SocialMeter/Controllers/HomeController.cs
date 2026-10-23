@@ -91,6 +91,48 @@ public sealed class HomeController : ControllerBase
     }
 
     /// <summary>
+    /// What the search box offers before anything is typed: the titles people are posting about most this week (from our
+    /// own counts, games included) and TMDB's trending list. Built from data already on hand; nothing about the visitor
+    /// or what they search for is recorded.
+    /// </summary>
+    [HttpGet("suggestions")]
+    public async Task<ActionResult<SearchSuggestionsDto>> Suggestions(CancellationToken ct)
+    {
+        var result = await _cache.GetOrCreateAsync("home:suggestions", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = FeaturedCacheFor;
+            var talked = new List<TalkedAboutDto>();
+            var windowDays = Math.Clamp(_options.FeaturedWindowDays, 1, 14);
+            try
+            {
+                var since = DateTime.UtcNow.AddDays(-windowDays);
+                var candidates = await _queries.GetMostTalkedAboutAsync(since, Math.Max(1, _options.FeaturedMinPosts), 30, ct);
+                // Steam reviews arrive by the hundred and would crowd out every movie and show, so games get one place.
+                var picks = candidates.Where(c => c.MediaType != MediaType.Game).Take(4)
+                    .Concat(candidates.Where(c => c.MediaType == MediaType.Game).Take(1))
+                    .OrderByDescending(c => c.Posts);
+                foreach (var c in picks)
+                    if (await _titles.GetDetailsAsync(c.MediaType, c.TmdbId, ct) is { } title)
+                        talked.Add(new TalkedAboutDto { Title = title, Posts = c.Posts });
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Search suggestions: most-talked-about lookup failed; offering trending only");
+            }
+
+            var trending = await _titles.GetTrendingAsync(null, 1, ct);
+            var seen = talked.Select(t => (t.Title.MediaType, t.Title.TmdbId)).ToHashSet();
+            return new SearchSuggestionsDto
+            {
+                TalkedAbout = talked,
+                Trending = trending.Items.Where(t => !seen.Contains((t.MediaType, t.TmdbId))).Take(5).ToList(),
+                WindowDays = windowDays
+            };
+        });
+        return Ok(result);
+    }
+
+    /// <summary>
     /// The hero: the tracked movie or show people are actually posting about (see <see cref="FeaturedPick"/>), else TMDB's
     /// trending pick, labelled as TMDB's. The post counts change only when titles are pulled, so they are cached briefly.
     /// </summary>
