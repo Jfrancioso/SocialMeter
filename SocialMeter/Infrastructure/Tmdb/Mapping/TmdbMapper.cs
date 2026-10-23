@@ -47,8 +47,24 @@ internal static class TmdbMapper
             Status = r.Status,
             ImdbId = r.ImdbId ?? r.ExternalIds?.ImdbId,
             Homepage = string.IsNullOrWhiteSpace(r.Homepage) ? null : r.Homepage,
-            Trailer = TrailerPicker.FromTmdb(r.Videos?.Results)
+            Trailer = TrailerPicker.FromTmdb(r.Videos?.Results),
+            Creators = Creators(r, isTv),
+            Cast = (r.Credits?.Cast ?? new List<TmdbCastMember>())
+                .Where(c => !string.IsNullOrWhiteSpace(c.Name))
+                .OrderBy(c => c.Order)
+                .Take(5)
+                .Select(c => new CastCredit(c.Name!.Trim(), string.IsNullOrWhiteSpace(c.Character) ? null : c.Character.Trim()))
+                .ToList()
         };
+    }
+
+    /// <summary>A show's creators, or a movie's directors; at most three.</summary>
+    private static IReadOnlyList<string> Creators(TmdbTitleItem r, bool isTv)
+    {
+        var names = isTv
+            ? (r.CreatedBy ?? new List<TmdbPerson>()).Select(p => p.Name)
+            : (r.Credits?.Crew ?? new List<TmdbCrewMember>()).Where(c => c.Job == "Director").Select(c => c.Name);
+        return names.Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => n!.Trim()).Distinct().Take(3).ToList();
     }
 
     /// <summary>Maps a multi-search / trending-all item using its media_type; null for people and unknown kinds.</summary>

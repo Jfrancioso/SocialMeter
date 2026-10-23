@@ -375,18 +375,11 @@ public class WatchWindowTests
                 new WatchWindow { MediaType = MediaType.Tv, TmdbId = 42, StartsAt = clock.Now.AddDays(1), EndsAt = clock.Now.AddDays(2) }
             }
         };
-        var windows = new WatchWindows(new StaticMonitor<WatchOptions>(options), clock);
+        var windows = new WatchWindows(new TestOptionsMonitor<WatchOptions>(options), clock);
 
         Assert.Equal("Watch party tonight", WatchWindows.ReasonFor(windows.OpenFor(MediaType.Movie, 42)!));
         Assert.Null(windows.OpenFor(MediaType.Tv, 42));          // same id, other type, and not open yet
         Assert.Null(windows.OpenFor(MediaType.Movie, 43));
     }
 
-    private sealed class StaticMonitor<T> : Microsoft.Extensions.Options.IOptionsMonitor<T>
-    {
-        public StaticMonitor(T value) => CurrentValue = value;
-        public T CurrentValue { get; }
-        public T Get(string? name) => CurrentValue;
-        public IDisposable? OnChange(Action<T, string?> listener) => null;
-    }
 }

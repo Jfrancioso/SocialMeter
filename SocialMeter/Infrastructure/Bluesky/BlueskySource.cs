@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Social;
 using SocialMeter.Domain.Models;
 using SocialMeter.Options;
 
@@ -21,13 +22,15 @@ public sealed class BlueskySource : ISocialSource
     private readonly HttpClient _http;
     private readonly BlueskySession _session;
     private readonly BlueskyOptions _options;
+    private readonly TitleSearchPlanner _searches;
     private readonly ILogger<BlueskySource> _logger;
 
-    public BlueskySource(HttpClient http, BlueskySession session, IOptions<BlueskyOptions> options, ILogger<BlueskySource> logger)
+    public BlueskySource(HttpClient http, BlueskySession session, IOptions<BlueskyOptions> options, TitleSearchPlanner searches, ILogger<BlueskySource> logger)
     {
         _http = http;
         _session = session;
         _options = options.Value;
+        _searches = searches;
         _logger = logger;
         _http.BaseAddress = new Uri(_options.ServiceUrl.TrimEnd('/') + "/");
         _http.Timeout = TimeSpan.FromSeconds(20);
@@ -43,9 +46,17 @@ public sealed class BlueskySource : ISocialSource
         if (!IsConfigured)
             return Array.Empty<SocialPostCandidate>();
 
+        var search = _searches.For(title);
+        if (search.Skip)
+        {
+            _logger.LogInformation("Bluesky: skipped {Title}: the name is an everyday word and nothing is known to pin it down", title.Name);
+            return Array.Empty<SocialPostCandidate>();
+        }
+
         var since = DateTime.UtcNow.AddDays(-Math.Clamp(_options.SearchDays, 1, 30)).ToString("yyyy-MM-ddTHH:mm:ssZ");
         var pages = Math.Clamp(_options.ScanLimit / PageSize, 1, 10);
-        var query = Uri.EscapeDataString($"\"{title.Name}\"");
+        var query = Uri.EscapeDataString(BlueskyPosts.Query(search));
+        var context = search.Ambiguous ? search.Context : null;
 
         var found = new Dictionary<string, SocialPostCandidate>();
         var scanned = 0;
@@ -62,7 +73,7 @@ public sealed class BlueskySource : ISocialSource
             foreach (var post in posts.EnumerateArray())
             {
                 scanned++;
-                if (BlueskyPosts.ToCandidate(post, title.MediaType, _options.ExcludeTerms) is { } c)
+                if (BlueskyPosts.ToCandidate(post, title.MediaType, _options.ExcludeTerms, context) is { } c)
                     found.TryAdd(c.ExternalId, c);
             }
 

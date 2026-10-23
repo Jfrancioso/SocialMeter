@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using SocialMeter.Application.Social;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Bluesky;
 using SocialMeter.Options;
@@ -38,7 +39,23 @@ public class BlueskyLiveCheck
 
         var opts = Microsoft.Extensions.Options.Options.Create(options);
         var session = new BlueskySession(new Factory(), opts, NullLogger<BlueskySession>.Instance);
-        var source = new BlueskySource(new HttpClient(), session, opts, NullLogger<BlueskySource>.Instance);
+        var searches = new TitleSearchPlanner(new TestOptionsMonitor<SearchOptions>(new SearchOptions
+        {
+            Titles = { ["tv_124364"] = new TitleSearchTuning { Terms = { "Fromville" } } }
+        }));
+        var source = new BlueskySource(new HttpClient(), session, opts, searches, NullLogger<BlueskySource>.Instance);
+
+        // FROM: an everyday word, so the search carries its context. Printed for a person to judge, not asserted:
+        // the show is between seasons and some weeks have very few posts.
+        var from = new Title
+        {
+            TmdbId = 124364, MediaType = MediaType.Tv, Name = "FROM", Creators = new[] { "John Griffin" },
+            Cast = new[] { new CastCredit("Harold Perrineau", "Boyd Stevens"), new CastCredit("Catalina Sandino Moreno", "Tabitha Matthews") }
+        };
+        var fromPosts = await source.FetchAsync(from);
+        _out.WriteLine($"FROM: {fromPosts.Count} posts");
+        foreach (var p in fromPosts.Take(8))
+            _out.WriteLine($"  {p.Upvotes,5} likes  {p.Content.ReplaceLineEndings(" ")[..Math.Min(90, p.Content.Length)]}");
 
         var title = new Title { TmdbId = 1400940, MediaType = MediaType.Movie, Name = "Clayface", ReleaseDate = new DateOnly(2026, 10, 23) };
         var posts = await source.FetchAsync(title);

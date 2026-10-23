@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.Configure<GuardrailOptions>(configuration.GetSection(GuardrailOptions.SectionName));
         services.Configure<WatchOptions>(configuration.GetSection(WatchOptions.SectionName));
         services.Configure<HomeOptions>(configuration.GetSection(HomeOptions.SectionName));
+        services.Configure<SearchOptions>(configuration.GetSection(SearchOptions.SectionName));
         services.TryAddSingleton(TimeProvider.System);
 
         // Use cases, one class each.
@@ -46,6 +47,7 @@ public static class DependencyInjection
         services.AddSingleton<VerdictAssessor>();
         services.AddSingleton<ISentimentAnalyzer, LexiconSentimentAnalyzer>();
         services.AddSingleton<PullGate>();
+        services.AddSingleton<TitleSearchPlanner>();
 
         // Guardrails (docs/OPERATIONS.md): what bounds the bill and what gets logged for the alert emails.
         services.AddSingleton<GuardrailLog>();

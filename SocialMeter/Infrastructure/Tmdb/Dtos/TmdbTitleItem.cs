@@ -38,6 +38,34 @@ public sealed class TmdbTitleItem
     public List<TmdbGenre>? Genres { get; set; }
     [JsonPropertyName("external_ids")] public TmdbExternalIds? ExternalIds { get; set; }
     public TmdbVideos? Videos { get; set; }
+    public TmdbCredits? Credits { get; set; }
+
+    /// <summary>TV only: who created the show.</summary>
+    [JsonPropertyName("created_by")] public List<TmdbPerson>? CreatedBy { get; set; }
+}
+
+public sealed class TmdbCredits
+{
+    public List<TmdbCastMember>? Cast { get; set; }
+    public List<TmdbCrewMember>? Crew { get; set; }
+}
+
+public sealed class TmdbCastMember
+{
+    public string? Name { get; set; }
+    public string? Character { get; set; }
+    public int Order { get; set; }
+}
+
+public sealed class TmdbCrewMember
+{
+    public string? Name { get; set; }
+    public string? Job { get; set; }
+}
+
+public sealed class TmdbPerson
+{
+    public string? Name { get; set; }
 }
 
 public sealed class TmdbVideos

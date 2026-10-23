@@ -28,6 +28,12 @@ public sealed class Title
     /// <summary>The trailer to offer on the title page: YouTube for movies and shows, Steam's own video for games.</summary>
     public TitleTrailer? Trailer { get; init; }
 
+    /// <summary>A show's creators or a movie's directors (details only). Part of what pins down a title whose name is an everyday word.</summary>
+    public IReadOnlyList<string> Creators { get; init; } = Array.Empty<string>();
+
+    /// <summary>The top-billed cast and the characters they play (details only).</summary>
+    public IReadOnlyList<CastCredit> Cast { get; init; } = Array.Empty<CastCredit>();
+
     // Game-only fields (null for movies and shows)
     public string? Developer { get; init; }
 
@@ -49,3 +55,6 @@ public sealed class Title
     public bool Tracked { get; set; }
     public string? TrackedReason { get; set; }
 }
+
+/// <summary>One actor and the character they play.</summary>
+public sealed record CastCredit(string Name, string? Character);

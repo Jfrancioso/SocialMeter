@@ -1,14 +1,15 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using SocialMeter.Application.Social;
 using SocialMeter.Domain.Models;
 
 namespace SocialMeter.Infrastructure.Bluesky;
 
 /// <summary>
 /// Turns Bluesky post views (from searchPosts or getPosts) into post candidates, applying the same rules the X search
-/// applies on X's side: no replies, the post itself must say what kind of title it is talking about, and promo phrases
-/// are dropped. Pure, so the rules are tested without the network.
+/// applies on X's side: no replies, the post itself must say what kind of title it is talking about (or, for an
+/// everyday-word name, name one of its context terms), and promo phrases are dropped. Pure, so the rules are tested without the network.
 /// </summary>
 public static partial class BlueskyPosts
 {
@@ -21,7 +22,20 @@ public static partial class BlueskyPosts
         "porn", "sexual", "nudity", "graphic-media", "gore"
     };
 
-    public static SocialPostCandidate? ToCandidate(JsonElement post, MediaType mediaType, IReadOnlyCollection<string> excludeTerms)
+    /// <summary>
+    /// The search text. Bluesky's search takes Elasticsearch-style syntax: quotes for a phrase, a space for AND, "|" for
+    /// OR (the word OR is not understood). An everyday-word name must come with one of its context terms:
+    /// "FROM" (Fromville | "Harold Perrineau"). Measured 2026-10-23: plain "FROM" gave 276 posts and none about the show;
+    /// with context, 10 posts and 8 about it.
+    /// </summary>
+    public static string Query(TitleSearch search) => search.Ambiguous && search.Context.Count > 0
+        ? $"\"{search.Name}\" ({string.Join(" | ", search.Context.Select(t => t.Contains(' ') ? $"\"{t}\"" : t))})"
+        : $"\"{search.Name}\"";
+
+    /// <param name="context">For an everyday-word name, the terms that pin it down: a post that names one of them counts
+    /// even without a media word ("Seasons 1-3 of From, starring Harold Perrineau"). Null for distinctive names.</param>
+    public static SocialPostCandidate? ToCandidate(JsonElement post, MediaType mediaType, IReadOnlyCollection<string> excludeTerms,
+        IReadOnlyList<string>? context = null)
     {
         if (ExternalIdFromUri(Str(post, "uri")) is not { } externalId) return null;
         if (!post.TryGetProperty("record", out var record) || record.ValueKind != JsonValueKind.Object) return null;
@@ -31,7 +45,8 @@ public static partial class BlueskyPosts
 
         var text = Str(record, "text");
         if (string.IsNullOrWhiteSpace(text)) return null;
-        if (!ContextWords(mediaType).IsMatch(text)) return null;
+        var namesContext = context?.Any(t => text.Contains(t, StringComparison.OrdinalIgnoreCase)) == true;
+        if (!namesContext && !ContextWords(mediaType).IsMatch(text)) return null;
         if (excludeTerms.Any(t => t.Trim().Length > 0 && text.Contains(t.Trim(), StringComparison.OrdinalIgnoreCase))) return null;
 
         var author = post.TryGetProperty("author", out var a) ? a : default;

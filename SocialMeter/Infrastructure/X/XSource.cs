@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Application.Common;
 using SocialMeter.Application.Guardrails;
+using SocialMeter.Application.Social;
 using SocialMeter.Domain.Models;
 using SocialMeter.Options;
 
@@ -20,13 +21,18 @@ public sealed class XSource : ISocialSource
     private readonly HttpClient _http;
     private readonly XOptions _options;
     private readonly UsageMeter _usage;
+    private readonly TitleSearchPlanner _searches;
     private readonly ILogger<XSource> _logger;
 
-    public XSource(HttpClient http, IOptions<XOptions> options, UsageMeter usage, ILogger<XSource> logger)
+    /// <summary>X's limit on a recent-search query.</summary>
+    public const int MaxQueryLength = 512;
+
+    public XSource(HttpClient http, IOptions<XOptions> options, UsageMeter usage, TitleSearchPlanner searches, ILogger<XSource> logger)
     {
         _http = http;
         _options = options.Value;
         _usage = usage;
+        _searches = searches;
         _logger = logger;
 
         var baseUrl = _options.BaseUrl.EndsWith('/') ? _options.BaseUrl : _options.BaseUrl + "/";
@@ -44,13 +50,14 @@ public sealed class XSource : ISocialSource
         if (!IsConfigured)
             return Array.Empty<SocialPostCandidate>();
 
-        // Replies are almost never reviews ("@grok what movie is this?"), promoted posts are ads, and every post returned
-        // costs credits. The excluded phrases are the ones that were pure promo/news in the data; see XOptions.ExcludeTerms.
-        var exclusions = string.Join(' ', _options.ExcludeTerms
-            .Select(t => t.Trim())
-            .Where(t => t.Length > 0)
-            .Select(t => t.Contains(' ') ? $"-\"{t}\"" : $"-{t}"));
-        var query = $"\"{title.Name}\" {title.MediaType.SearchWords()} -is:retweet -is:reply -is:nullcast lang:en {exclusions}".Trim();
+        var search = _searches.For(title);
+        if (search.Skip)
+        {
+            _logger.LogInformation("X: skipped {Title}: the name is an everyday word and nothing is known to pin it down", title.Name);
+            return Array.Empty<SocialPostCandidate>();
+        }
+
+        var query = BuildQuery(search, title.MediaType, _options.ExcludeTerms);
         var max = Math.Clamp(_options.MaxResults, 10, 100);
 
         var url = "tweets/search/recent" +
@@ -116,6 +123,32 @@ public sealed class XSource : ISocialSource
 
         _logger.LogInformation("X: {Count} posts for {Title} ({WithMedia} with media)", results.Count, title.Name, results.Count(r => r.Media is not null));
         return results;
+    }
+
+    /// <summary>
+    /// The recent-search query. A distinctive name goes with the media words ("Clayface" (movie OR film)); an everyday
+    /// word goes with the terms that pin it down ("FROM" (Fromville OR "Harold Perrineau" ...)), trimmed from the end to
+    /// fit X's length limit. Replies are almost never reviews ("@grok what movie is this?"), promoted posts are ads, and
+    /// every post returned costs credits; the excluded phrases are the ones that were pure promo/news in the data.
+    /// </summary>
+    public static string BuildQuery(TitleSearch search, MediaType mediaType, IEnumerable<string> excludeTerms)
+    {
+        var exclusions = string.Join(' ', excludeTerms
+            .Select(t => t.Trim())
+            .Where(t => t.Length > 0)
+            .Select(t => t.Contains(' ') ? $"-\"{t}\"" : $"-{t}"));
+        const string filters = "-is:retweet -is:reply -is:nullcast lang:en";
+
+        if (!search.Ambiguous)
+            return $"\"{search.Name}\" {mediaType.SearchWords()} {filters} {exclusions}".Trim();
+
+        var context = search.Context.Select(t => t.Contains(' ') ? $"\"{t}\"" : t).ToList();
+        while (true)
+        {
+            var query = $"\"{search.Name}\" ({string.Join(" OR ", context)}) {filters} {exclusions}".Trim();
+            if (query.Length <= MaxQueryLength || context.Count == 1) return query;
+            context.RemoveAt(context.Count - 1);
+        }
     }
 
     /// <summary>
