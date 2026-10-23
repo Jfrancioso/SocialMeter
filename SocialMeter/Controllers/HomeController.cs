@@ -21,16 +21,18 @@ public sealed class HomeController : ControllerBase
     private readonly ITitleTracker _tracker;
     private readonly IPostQueries _queries;
     private readonly SocialMeterOptions _options;
+    private readonly HomeOptions _home;
     private readonly IMemoryCache _cache;
     private readonly ILogger<HomeController> _logger;
 
     public HomeController(ITitleService titles, ITitleTracker tracker, IPostQueries queries, IOptions<SocialMeterOptions> options,
-        IMemoryCache cache, ILogger<HomeController> logger)
+        IOptions<HomeOptions> home, IMemoryCache cache, ILogger<HomeController> logger)
     {
         _titles = titles;
         _tracker = tracker;
         _queries = queries;
         _options = options.Value;
+        _home = home.Value;
         _cache = cache;
         _logger = logger;
     }
@@ -44,37 +46,37 @@ public sealed class HomeController : ControllerBase
         if (_cache.TryGetValue(key, out HomeResponseDto? cached) && cached is not null)
             return Ok(cached);
 
+        // Trending is always fetched: the hero falls back to it. Every other row is fetched only if Home:Rows lists it.
+        var wanted = _home.Effective;
         var trendingTask = _titles.GetTrendingAsync(null, 1, ct);
-        var nowPlayingTask = _titles.GetNowPlayingAsync(region, 1, ct);
-        var onTheAirTask = _titles.GetOnTheAirAsync(1, ct);
-        var seasonalTask = _tracker.GetSeasonalRowAsync(ct);
-        var seasonalTopTask = _tracker.GetSeasonalTopRowsAsync(region, ct);
-        var popularMoviesTask = _titles.GetPopularAsync(MediaType.Movie, 1, ct);
-        var popularTvTask = _titles.GetPopularAsync(MediaType.Tv, 1, ct);
-        var topGamesTask = SafeAsync(_titles.GetTrendingAsync(MediaType.Game, 1, ct));
-        var mostPlayedTask = SafeAsync(_titles.GetPopularAsync(MediaType.Game, 1, ct));
-
-        await Task.WhenAll(trendingTask, nowPlayingTask, onTheAirTask, seasonalTask, seasonalTopTask, popularMoviesTask, popularTvTask, topGamesTask, mostPlayedTask);
-
-        var trending = trendingTask.Result;
-        var (seasonLabel, seasonSubtitle, seasonItems) = seasonalTask.Result;
-        var (featured, featuredLabel, featuredPosts) = await PickFeaturedAsync(trending.Items, ct);
-
-        // Seasonal top rows (October's horror pair) come before everything else; the rest of the page keeps its order.
-        var rows = seasonalTopTask.Result
-            .Select(r => new HomeRowDto { Key = r.Key, Title = r.Title, Subtitle = r.Subtitle, Items = r.Items })
-            .ToList();
-        rows.AddRange(new List<HomeRowDto>
+        var builders = new Dictionary<string, Func<Task<IReadOnlyList<HomeRowDto>>>>
         {
-            new() { Key = "trending", Title = "Trending now", Subtitle = "What the internet is talking about today", Items = trending.Items },
-            new() { Key = "now_playing", Title = "In theaters", Subtitle = "Playing near you", Items = nowPlayingTask.Result.Items },
-            new() { Key = "seasonal", Title = seasonLabel, Subtitle = seasonSubtitle, Items = seasonItems },
-            new() { Key = "on_the_air", Title = "On TV this week", Subtitle = "Shows with new episodes airing", Items = onTheAirTask.Result.Items },
-            new() { Key = "top_games", Title = "Hot on Steam", Subtitle = "This week's top sellers", Items = topGamesTask.Result },
-            new() { Key = "popular_movies", Title = "Popular movies", Items = popularMoviesTask.Result.Items },
-            new() { Key = "popular_tv", Title = "Popular shows", Items = popularTvTask.Result.Items },
-            new() { Key = "most_played", Title = "Most played right now", Subtitle = "Steam's live player counts", Items = mostPlayedTask.Result }
-        });
+            ["trending"] = async () => Row("trending", "Trending now", "What the internet is talking about today", (await trendingTask).Items),
+            ["now_playing"] = async () => Row("now_playing", "In theaters", "Playing near you", (await _titles.GetNowPlayingAsync(region, 1, ct)).Items),
+            ["seasonal"] = async () =>
+            {
+                var (label, subtitle, items) = await _tracker.GetSeasonalRowAsync(ct);
+                return Row("seasonal", label, subtitle, items);
+            },
+            ["on_the_air"] = async () => Row("on_the_air", "On TV this week", "Shows with new episodes airing", (await _titles.GetOnTheAirAsync(1, ct)).Items),
+            ["top_games"] = async () => Row("top_games", "Hot on Steam", "This week's top sellers", await SafeAsync(_titles.GetTrendingAsync(MediaType.Game, 1, ct))),
+            ["popular_movies"] = async () => Row("popular_movies", "Popular movies", null, (await _titles.GetPopularAsync(MediaType.Movie, 1, ct)).Items),
+            ["popular_tv"] = async () => Row("popular_tv", "Popular shows", null, (await _titles.GetPopularAsync(MediaType.Tv, 1, ct)).Items),
+            ["most_played"] = async () => Row("most_played", "Most played right now", "Steam's live player counts", await SafeAsync(_titles.GetPopularAsync(MediaType.Game, 1, ct)))
+        };
+        // October's horror pair comes from one call; it supplies whichever of its two rows are listed.
+        if (wanted.Contains("horror_trending") || wanted.Contains("horror_theaters"))
+            builders["horror"] = async () => (await _tracker.GetSeasonalTopRowsAsync(region, ct))
+                .Select(r => new HomeRowDto { Key = r.Key, Title = r.Title, Subtitle = r.Subtitle, Items = r.Items }).ToList();
+
+        var fetched = await Task.WhenAll(builders
+            .Where(b => wanted.Contains(b.Key) || b.Key == "horror")
+            .Select(b => b.Value()));
+        var byKey = fetched.SelectMany(rs => rs).GroupBy(r => r.Key).ToDictionary(g => g.Key, g => g.First());
+
+        var trending = await trendingTask;
+        var (featured, featuredLabel, featuredPosts) = await PickFeaturedAsync(trending.Items, ct);
+        var rows = Dedupe(wanted.Where(byKey.ContainsKey).Select(k => byKey[k]));
 
         await _tracker.AnnotateAsync(rows.SelectMany(r => r.Items).Concat(featured is null ? [] : [featured]), ct);
 
@@ -84,7 +86,7 @@ public sealed class HomeController : ControllerBase
             FeaturedLabel = featuredLabel,
             FeaturedPosts = featuredPosts,
             FeaturedWindowDays = _options.FeaturedWindowDays,
-            Rows = rows.Where(r => r.Items.Count > 0).ToList()
+            Rows = rows
         };
         _cache.Set(key, response, CacheFor);
         return Ok(response);
@@ -168,6 +170,26 @@ public sealed class HomeController : ControllerBase
 
         var fallback = trending.FirstOrDefault(t => t.BackdropPath.Length > 0) ?? trending.FirstOrDefault();
         return (fallback, FeaturedPick.TrendingOnTmdb, null);
+    }
+
+    private static IReadOnlyList<HomeRowDto> Row(string key, string title, string? subtitle, IReadOnlyList<Title> items) =>
+        new[] { new HomeRowDto { Key = key, Title = title, Subtitle = subtitle, Items = items } };
+
+    /// <summary>
+    /// Each title appears only in the first row (in page order) that has it, so the page shows more titles and fewer
+    /// repeats; a row left with nothing is dropped.
+    /// </summary>
+    public static List<HomeRowDto> Dedupe(IEnumerable<HomeRowDto> rows)
+    {
+        var seen = new HashSet<(MediaType, int)>();
+        var result = new List<HomeRowDto>();
+        foreach (var row in rows)
+        {
+            var items = row.Items.Where(t => seen.Add((t.MediaType, t.TmdbId))).ToList();
+            if (items.Count > 0)
+                result.Add(new HomeRowDto { Key = row.Key, Title = row.Title, Subtitle = row.Subtitle, Items = items });
+        }
+        return result;
     }
 
     /// <summary>Steam is a second provider; if it is down the home page should still render the TMDB rows.</summary>
