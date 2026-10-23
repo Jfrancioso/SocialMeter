@@ -51,9 +51,10 @@ public class ParallelBatchesTests
             return batch;
         });
 
-        // Six batches of 200 ms, three at a time: about 400 ms instead of 1,200 ms one by one.
+        // Six batches of 200 ms, three at a time: about 400 ms instead of 1,200 ms one by one. The peak proves the overlap;
+        // the time only has to beat one-by-one, because a busy CI machine can add a few hundred ms (it once took 1,007).
         Assert.Equal(3, peak);
-        Assert.InRange(clock.ElapsedMilliseconds, 350, 1000);
+        Assert.InRange(clock.ElapsedMilliseconds, 350, 1199);
     }
 
     [Fact]
