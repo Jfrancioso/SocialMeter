@@ -36,6 +36,9 @@ public interface IPostQueries
     /// <summary>Cached readings only. Keys look like "movie:693134".</summary>
     Task<IReadOnlyDictionary<string, SnapshotDto>> GetSnapshotsAsync(IEnumerable<(MediaType MediaType, int TmdbId)> keys, CancellationToken ct = default);
 
+    /// <summary>Titles that have a reading (at least one counted post), most recently read first. For the sitemap.</summary>
+    Task<IReadOnlyList<SocialMeter.Contracts.Seo.SitemapTitleDto>> GetScoredTitlesAsync(int take, CancellationToken ct = default);
+
     Task<ScoreHistoryDto> GetHistoryAsync(MediaType mediaType, int tmdbId, int days, CancellationToken ct = default);
 
     /// <summary>Titles by counted posts created since <paramref name="since"/>, most first, with their reading's confidence.</summary>

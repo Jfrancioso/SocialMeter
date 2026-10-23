@@ -76,6 +76,14 @@ public sealed class PostQueryService : IPostQueries
             .ToList();
     }
 
+    public async Task<IReadOnlyList<SocialMeter.Contracts.Seo.SitemapTitleDto>> GetScoredTitlesAsync(int take, CancellationToken ct = default) =>
+        await _db.TitleSnapshots.AsNoTracking()
+            .Where(s => s.TotalPosts > 0)
+            .OrderByDescending(s => s.LastRefreshedAt)
+            .Take(take)
+            .Select(s => new SocialMeter.Contracts.Seo.SitemapTitleDto(s.MediaType, s.TmdbId, s.LastRefreshedAt))
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyDictionary<string, SnapshotDto>> GetSnapshotsAsync(IEnumerable<(MediaType MediaType, int TmdbId)> keys, CancellationToken ct = default)
     {
         var list = keys.Distinct().ToList();
