@@ -1,2 +1,9 @@
-# ZAP baseline rules: <rule id>\t<IGNORE|WARN|FAIL>\t<why>. Unlisted rules use ZAP's default (WARN), which fails the
-# weekly scan, so every alert is either fixed or reviewed and listed here with the reason.
+# ZAP baseline rules: <rule id>\t<IGNORE|INFO|WARN|FAIL>\t<why>. Unlisted rules use ZAP's default (WARN), which fails the
+# weekly scan, so every alert is either fixed or reviewed and listed here with the reason. INFO keeps it in the report
+# without failing the run; IGNORE drops it.
+10015	IGNORE	(Re-examine Cache-control Directives: index.html is no-cache so a deploy shows at once; API answers are no-store on purpose)
+10049	IGNORE	(Storable / Non-Storable Content: the cache headers above are deliberate; hashed /assets are immutable)
+10109	IGNORE	(Modern Web Application: informational, the site is a single-page app)
+90003	INFO	(Sub Resource Integrity Attribute Missing: Google Fonts returns different CSS per browser, so it cannot carry a fixed hash)
+10055	INFO	(CSP: style-src keeps 'unsafe-inline' because Vue writes some static markup with inline style attributes; scripts stay locked to 'self'. Review CSP edits by hand)
+90004	INFO	(Cross-Origin isolation: COOP and CORP are set; COEP is not, because require-corp would block TMDB posters and the YouTube trailer frame)

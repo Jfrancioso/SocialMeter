@@ -86,6 +86,7 @@ public static class DependencyInjection
             ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
             ctx.Response.Headers["X-Frame-Options"] = "DENY";
             ctx.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+            ctx.Response.Headers["Cross-Origin-Resource-Policy"] = "same-site";
             ctx.Response.Headers["Cache-Control"] = ctx.Response.Headers["Cache-Control"].Count > 0 ? ctx.Response.Headers["Cache-Control"] : "no-store";
             await next();
         });
