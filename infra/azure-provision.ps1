@@ -96,7 +96,8 @@ Invoke-Az webapp config set --name $webapp --resource-group $rg --always-on true
 # New App Service apps ship with basic publishing credentials disabled; the publish-profile deploy in GitHub Actions needs them.
 Invoke-Az resource update --resource-group $rg --name scm --namespace Microsoft.Web --resource-type basicPublishingCredentialsPolicies `
   --parent "sites/$webapp" --set properties.allow=true --output none | Out-Null
-Invoke-Az webapp update --name $webapp --resource-group $rg --https-only true --output none | Out-Null
+# Client affinity off: one stateless instance needs no sticky sessions, and it would set ARRAffinity cookies on every response.
+Invoke-Az webapp update --name $webapp --resource-group $rg --https-only true --client-affinity-enabled false --output none | Out-Null
 Invoke-Az webapp config connection-string set --name $webapp --resource-group $rg --connection-string-type SQLAzure `
   --settings "DefaultConnection=$connectionString" --output none | Out-Null
 

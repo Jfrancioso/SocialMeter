@@ -28,6 +28,9 @@ public sealed class PostIngestionService
         _logger = logger;
     }
 
+    /// <summary>What a public response says when a source fails; the reason is in the logs.</summary>
+    public const string PublicSourceError = "Temporarily unavailable";
+
     public string AssessorName => _assessor.Name;
 
     /// <summary>
@@ -91,8 +94,10 @@ public sealed class PostIngestionService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // The full error (often an upstream API's own response) goes to the logs only; this status is in public
+            // responses, so it says no more than that the source didn't answer.
             _logger.LogWarning(ex, "{Platform} fetch failed for {Title}", source.Platform, title.Name);
-            return (source, null, new SourceStatusDto { Platform = source.Platform, Configured = true, Fetched = 0, Error = ex.Message });
+            return (source, null, new SourceStatusDto { Platform = source.Platform, Configured = true, Fetched = 0, Error = PublicSourceError });
         }
     }
 
