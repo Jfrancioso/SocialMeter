@@ -49,11 +49,20 @@ public sealed class RequireAdminAttribute : Attribute, IAsyncAuthorizationFilter
                     http.Items[ActorItem] = email!;
                     return;
                 }
+                Log(http).LogWarning("Admin: a signed-in Cloudflare Access email is not on Admin:Emails");
                 context.Result = new ObjectResult(new ProblemDetails { Status = 403, Title = "Not an admin" }) { StatusCode = 403 };
                 return;
             }
+
+            // A token that came with the request but failed the check: say which check (issuer, audience, signature,
+            // expiry) by the exception type alone, so a misconfiguration is quick to spot and nothing from the token is logged.
+            if (result.Failure is not null)
+                Log(http).LogWarning("Admin: Cloudflare Access token rejected ({Check})", result.Failure.GetType().Name);
         }
 
         context.Result = new UnauthorizedObjectResult(new ProblemDetails { Status = 401, Title = "Sign in required" });
     }
+
+    private static ILogger Log(HttpContext http) =>
+        http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger<RequireAdminAttribute>();
 }
