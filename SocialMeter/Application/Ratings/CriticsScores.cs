@@ -31,17 +31,29 @@ public sealed class CriticsScores
     /// <summary>
     /// Stores a freshly computed baseline on the title's snapshot, if it has one. A missing value never erases a known one
     /// (a source being down for an hour shouldn't blank the card). Writes at most once a day per title.
+    /// Best effort: it runs inside the ratings request, and a failed save must never turn the ratings into an error.
     /// </summary>
     public async Task RecordAsync(MediaType mediaType, int tmdbId, int? score, DateTime nowUtc, CancellationToken ct = default)
     {
         if (mediaType == MediaType.Game) return;
-        var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == tmdbId && s.MediaType == mediaType, ct);
-        if (snapshot is null) return;
-        if (snapshot.CriticsScore == (score ?? snapshot.CriticsScore) && snapshot.CriticsCheckedAt > nowUtc.AddDays(-1)) return;
+        try
+        {
+            var snapshot = await _db.TitleSnapshots.SingleOrDefaultAsync(s => s.TmdbId == tmdbId && s.MediaType == mediaType, ct);
+            if (snapshot is null) return;
 
-        snapshot.CriticsScore = score ?? snapshot.CriticsScore;
-        snapshot.CriticsCheckedAt = nowUtc;
-        await _db.SaveChangesAsync(ct);
+            var newScore = score ?? snapshot.CriticsScore;          // a missing value keeps the known one
+            var unchanged = snapshot.CriticsScore == newScore;
+            var checkedToday = snapshot.CriticsCheckedAt > nowUtc.AddDays(-1);
+            if (unchanged && checkedToday) return;
+
+            snapshot.CriticsScore = newScore;
+            snapshot.CriticsCheckedAt = nowUtc;
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Could not store the critics score for {Type} {Id}", mediaType, tmdbId);
+        }
     }
 
     /// <summary>
@@ -76,45 +88,5 @@ public sealed class CriticsScores
             await Task.Delay(TimeSpan.FromSeconds(1), ct);
         }
         return done;
-    }
-}
-
-/// <summary>Every six hours, refreshes the critics scores that are missing or stale (25 titles a run).</summary>
-public sealed class CriticsRefreshWorker : BackgroundService
-{
-    private readonly IServiceScopeFactory _scopes;
-    private readonly ILogger<CriticsRefreshWorker> _logger;
-
-    public CriticsRefreshWorker(IServiceScopeFactory scopes, ILogger<CriticsRefreshWorker> logger)
-    {
-        _scopes = scopes;
-        _logger = logger;
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        try { await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken); }
-        catch (OperationCanceledException) { return; }
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                using var scope = _scopes.CreateScope();
-                var done = await scope.ServiceProvider.GetRequiredService<CriticsScores>().RefreshDueAsync(25, DateTime.UtcNow, stoppingToken);
-                if (done > 0) _logger.LogInformation("Critics scores refreshed for {Count} titles", done);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Critics refresh run failed");
-            }
-
-            try { await Task.Delay(TimeSpan.FromHours(6), stoppingToken); }
-            catch (OperationCanceledException) { return; }
-        }
     }
 }

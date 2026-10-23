@@ -21,7 +21,6 @@ public static class DependencyInjection
     public static IServiceCollection AddWeb(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<AdminOptions>(configuration.GetSection(AdminOptions.SectionName));
-        services.Configure<HomeOptions>(configuration.GetSection(HomeOptions.SectionName));
         services.AddCloudflareAccess(configuration);
         services.AddTelemetry(configuration);
 

@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Common;
 using SocialMeter.Domain.Models;
 using SocialMeter.Options;
 
@@ -112,8 +113,8 @@ public sealed partial class ArcticShiftSource : ISocialSource
 
             // Comments get their thread's title as context so the reader knows what "it" is.
             var content = it.IsComment && it.LinkTitle is not null
-                ? $"[Reply in \"{Truncate(it.LinkTitle, 120)}\"]\n{Truncate(text, 1500)}"
-                : Truncate(text, 1500);
+                ? $"[Reply in \"{it.LinkTitle.Ellipsize(120)}\"]\n{text.Ellipsize(1500)}"
+                : text.Ellipsize(1500);
 
             results.Add(new SocialPostCandidate(
                 Platform,
@@ -216,7 +217,6 @@ public sealed partial class ArcticShiftSource : ISocialSource
         }
     }
 
-    private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 
     [GeneratedRegex(@"[^A-Za-z0-9]")]
     private static partial Regex CompactRegex();

@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Common;
 using SocialMeter.Application.Guardrails;
 using SocialMeter.Domain.Models;
 using SocialMeter.Options;
@@ -66,7 +67,7 @@ public sealed class XSource : ISocialSource
             // HttpRequestException carries the status, which is how the circuit breaker tells "out of credit" (402) and
             // "slow down" (429) from a passing hiccup. X's own explanation ("credits depleted") is kept for the log.
             var body = await res.Content.ReadAsStringAsync(ct);
-            throw new HttpRequestException($"X search failed ({(int)res.StatusCode}): {(body.Length > 200 ? body[..200] : body)}", null, res.StatusCode);
+            throw new HttpRequestException($"X search failed ({(int)res.StatusCode}): {body.Clip(200)}", null, res.StatusCode);
         }
 
         var payload = await res.Content.ReadFromJsonAsync<XSearchResponse>(cancellationToken: ct);

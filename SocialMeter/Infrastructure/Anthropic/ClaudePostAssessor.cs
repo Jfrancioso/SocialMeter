@@ -6,6 +6,7 @@ using Anthropic.Exceptions;
 using Anthropic.Models.Messages;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Common;
 using SocialMeter.Application.Guardrails;
 using SocialMeter.Domain.Models;
 using SocialMeter.Options;
@@ -231,7 +232,7 @@ public sealed class ClaudePostAssessor : IPostAssessor
         if (title.Developer is not null) sb.Append(", by ").Append(title.Developer);
         sb.AppendLine();
         if (!string.IsNullOrWhiteSpace(title.Overview))
-            sb.Append("Synopsis: ").AppendLine(Truncate(title.Overview, 300));
+            sb.Append("Synopsis: ").AppendLine(title.Overview.Ellipsize(300));
 
         sb.AppendLine().AppendLine("Posts (use the id exactly as given):");
         for (var i = 0; i < batch.Count; i++)
@@ -242,12 +243,11 @@ public sealed class ClaudePostAssessor : IPostAssessor
             if (p.Community is not null) sb.Append(" in r/").Append(p.Community);
             if (p.Media is { Count: > 0 }) sb.Append(" (").Append(p.Media.Count).Append(p.Media.Count == 1 ? " image attached" : " images attached").Append(')');
             sb.AppendLine(":");
-            sb.AppendLine(Truncate(p.Content, _options.MaxPostChars)).AppendLine();
+            sb.AppendLine(p.Content.Ellipsize(_options.MaxPostChars)).AppendLine();
         }
         return sb.ToString();
     }
 
-    private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 
     private sealed class AssessmentResponse
     {

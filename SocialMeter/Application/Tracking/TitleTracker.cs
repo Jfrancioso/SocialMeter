@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Home;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Data;
 using SocialMeter.Options;
@@ -93,7 +94,7 @@ public sealed class TitleTracker : ITitleTracker
             var candidates = pages.SelectMany(p => p.Items).ToList();
             var ranked = ConversationRanking.Rank(candidates, await ConversationSignalsAsync(MediaType.Movie, candidates, ct), 20);
             if (ranked.Count > 0)
-                rows.Add(new SeasonalRow("horror_trending", "Horror trending now", "The horror people are actually posting about this week", ranked));
+                rows.Add(new SeasonalRow(HomeRowKeys.HorrorTrending, "Horror trending now", "The horror people are actually posting about this week", ranked));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -104,7 +105,7 @@ public sealed class TitleTracker : ITitleTracker
         {
             var theaters = await _titles.DiscoverInTheatersByGenreAsync(theme.MovieGenreId, region, days: 45, page: 1, ct);
             if (theaters.Items.Count > 0)
-                rows.Add(new SeasonalRow("horror_theaters", "New horror in theaters", "Opened in the last six weeks", theaters.Items.Take(20).ToList()));
+                rows.Add(new SeasonalRow(HomeRowKeys.HorrorTheaters, "New horror in theaters", "Opened in the last six weeks", theaters.Items.Take(20).ToList()));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

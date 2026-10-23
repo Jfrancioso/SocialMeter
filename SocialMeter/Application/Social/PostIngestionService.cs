@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Common;
 using SocialMeter.Application.Guardrails;
 using SocialMeter.Contracts.Social;
 using SocialMeter.Domain.Models;
@@ -169,8 +170,8 @@ public sealed class PostIngestionService
         MediaType = title.MediaType,
         Platform = c.Platform,
         ExternalId = c.ExternalId,
-        Author = Trim(c.Author, 100),
-        AuthorId = c.AuthorId is null ? null : Trim(c.AuthorId, 64),
+        Author = c.Author.Clip(100),
+        AuthorId = c.AuthorId is null ? null : c.AuthorId.Clip(64),
         AuthorCreatedAt = c.AuthorCreatedAt,
         AuthorReputation = c.AuthorReputation,
         Content = c.Content,
@@ -183,8 +184,8 @@ public sealed class PostIngestionService
         Comments = c.Comments,
         CreatedAt = c.CreatedAt,
         FetchedAt = now,
-        SourceUrl = c.SourceUrl is null ? null : Trim(c.SourceUrl, 500),
-        Community = c.Community is null ? null : Trim(c.Community, 100)
+        SourceUrl = c.SourceUrl is null ? null : c.SourceUrl.Clip(500),
+        Community = c.Community is null ? null : c.Community.Clip(100)
     };
 
     /// <summary>Writes an assessment plus trust verdict onto a post. Trust exclusions win; otherwise an off-topic post is excluded.</summary>
@@ -194,7 +195,7 @@ public sealed class PostIngestionService
         post.Sentiment = result.Label;
         post.SentimentScore = result.Score;
         post.Analyzer = assessment.ReadBy ?? analyzer;
-        post.AnalyzerNote = assessment.Note is null ? null : Trim(assessment.Note, 120);
+        post.AnalyzerNote = assessment.Note is null ? null : assessment.Note.Clip(120);
         post.Substance = Math.Clamp(assessment.Substance, 0, 1);
         post.TrustWeight = trust.Weight;
         // The platform's flag or our own read of the image: either hides media behind a tap.
@@ -234,5 +235,4 @@ public sealed class PostIngestionService
         return json.Length <= 2000 ? json : JsonSerializer.Serialize(media.Take(1));
     }
 
-    private static string Trim(string s, int max) => s.Length <= max ? s : s[..max];
 }

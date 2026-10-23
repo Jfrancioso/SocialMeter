@@ -23,6 +23,12 @@ public sealed class RatingsOptions
     /// <summary>IMDb refreshes the file daily.</summary>
     public int ImdbRefreshHours { get; set; } = 24;
 
+    /// <summary>How often the background job refreshes missing or stale critics scores (CriticsRefreshWorker).</summary>
+    public int CriticsRefreshHours { get; set; } = 6;
+
+    /// <summary>Titles refreshed per run, one at a time with a pause, so the ratings sites are asked politely.</summary>
+    public int CriticsRefreshBatch { get; set; } = 25;
+
     /// <summary>Honest identification for every outside page or file request.</summary>
     public string UserAgent { get; set; } = "Mozilla/5.0 (compatible; Chatterbub/1.0; +https://chatterbub.com)";
 }

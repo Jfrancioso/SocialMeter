@@ -1,3 +1,5 @@
+using SocialMeter.Application.Home;
+
 namespace SocialMeter.Options;
 
 /// <summary>
@@ -15,7 +17,8 @@ public sealed class HomeOptions
     /// <summary>Used when configuration lists no rows.</summary>
     public static readonly IReadOnlyList<string> DefaultRows = new[]
     {
-        "horror_trending", "heating_up", "gaps", "trending", "now_playing", "seasonal", "cooling_off", "most_played"
+        HomeRowKeys.HorrorTrending, HomeRowKeys.HeatingUp, HomeRowKeys.Gaps, HomeRowKeys.Trending,
+        HomeRowKeys.NowPlaying, HomeRowKeys.Seasonal, HomeRowKeys.CoolingOff, HomeRowKeys.MostPlayed
     };
 
     // Empty by default on purpose: the configuration binder appends to an existing array or list rather than replacing
@@ -24,4 +27,21 @@ public sealed class HomeOptions
 
     /// <summary>The rows to show, in order, without repeats.</summary>
     public IReadOnlyList<string> Effective => (Rows.Length > 0 ? Rows : DefaultRows).Distinct().ToList();
+
+    // ---- Signal rows (gaps, heating_up, cooling_off): which of our readings are solid enough to show. ----
+
+    /// <summary>Crowd vs critics: counted posts a title needs before its crowd score is compared with the critics'.</summary>
+    public int GapMinPosts { get; set; } = 15;
+
+    /// <summary>Crowd vs critics: the reading's confidence (0-1, how much of it is posts rather than the pull toward 50).</summary>
+    public double GapMinConfidence { get; set; } = 0.5;
+
+    /// <summary>Crowd vs critics: the smallest gap, in points, worth a place in the row.</summary>
+    public int GapMinPoints { get; set; } = 10;
+
+    /// <summary>Heating up / cooling off: counted posts a daily reading needs to take part in the trend test.</summary>
+    public int MoverMinPosts { get; set; } = 15;
+
+    /// <summary>Titles per signal row.</summary>
+    public int SignalRowSize { get; set; } = 12;
 }

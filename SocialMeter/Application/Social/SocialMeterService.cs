@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Common;
 using SocialMeter.Application.Guardrails;
 using SocialMeter.Contracts.Social;
 using SocialMeter.Domain.Models;
@@ -157,7 +158,7 @@ public sealed class SocialMeterService : ISocialMeterService
             At = now,
             MediaType = title.MediaType,
             TmdbId = title.TmdbId,
-            TitleName = title.Name.Length > 200 ? title.Name[..200] : title.Name,
+            TitleName = title.Name.Clip(200),
             Trigger = trigger.ToString().ToLowerInvariant(),
             Pulled = pulled,
             Outcome = outcome,

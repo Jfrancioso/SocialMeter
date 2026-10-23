@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Application.Events;
 using SocialMeter.Application.Guardrails;
+using SocialMeter.Application.Home;
 using SocialMeter.Application.Moderation;
 using SocialMeter.Application.Ratings;
 using SocialMeter.Application.Social;
@@ -19,6 +20,7 @@ public static class DependencyInjection
         services.Configure<SocialMeterOptions>(configuration.GetSection(SocialMeterOptions.SectionName));
         services.Configure<GuardrailOptions>(configuration.GetSection(GuardrailOptions.SectionName));
         services.Configure<WatchOptions>(configuration.GetSection(WatchOptions.SectionName));
+        services.Configure<HomeOptions>(configuration.GetSection(HomeOptions.SectionName));
         services.TryAddSingleton(TimeProvider.System);
 
         // Use cases, one class each.
@@ -37,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<OutboundClicks>();
         services.AddScoped<Ratings.CriticsScores>();
         services.AddScoped<GuardrailStatusService>();
+        services.AddScoped<HomeFeedService>();
 
         // Policies and guards: stateless or process-wide, so singletons.
         services.AddSingleton<TrustPolicy>();

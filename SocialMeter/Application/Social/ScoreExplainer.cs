@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Common;
 using SocialMeter.Contracts.Social;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Data;
@@ -46,7 +47,7 @@ public sealed class ScoreExplainer : IScoreExplainer
                 Id = p.Id,
                 Platform = p.Platform,
                 Author = p.Author,
-                Excerpt = Trim(p.Content.ReplaceLineEndings(" "), 140),
+                Excerpt = p.Content.ReplaceLineEndings(" ").Clip(140),
                 Sentiment = p.Sentiment,
                 SentimentScore = Math.Round(p.SentimentScore, 2),
                 SubstanceLevel = SocialPostDto.SubstanceLevelFor(p.Substance),
@@ -111,5 +112,4 @@ public sealed class ScoreExplainer : IScoreExplainer
 
     private static string PlatformName(string platform) => platform switch { "x" => "X", "reddit" => "Reddit", "steam" => "Steam", "bluesky" => "Bluesky", _ => platform };
 
-    private static string Trim(string s, int max) => s.Length <= max ? s : s[..max];
 }

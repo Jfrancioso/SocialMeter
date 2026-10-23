@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Common;
 using SocialMeter.Domain.Models;
 using SocialMeter.Options;
 
@@ -71,7 +72,7 @@ public sealed class RedditSource : ISocialSource
         {
             var content = string.IsNullOrWhiteSpace(d.SelfText)
                 ? d.Title ?? ""
-                : $"{d.Title}\n\n{Truncate(d.SelfText!, 1500)}";
+                : $"{d.Title}\n\n{d.SelfText!.Ellipsize(1500)}";
 
             RedditUser? user = null;
             if (d.AuthorFullname is not null) authors.TryGetValue(d.AuthorFullname, out user);
@@ -196,7 +197,6 @@ public sealed class RedditSource : ISocialSource
         return accessToken;
     }
 
-    private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 
     private sealed class RedditToken
     {

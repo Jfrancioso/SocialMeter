@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SocialMeter.Application.Common;
 using SocialMeter.Application.Social;
 using SocialMeter.Contracts.Admin;
 using SocialMeter.Domain.Models;
@@ -31,15 +32,19 @@ public sealed class ModerationService
         // From here on only our own copy of the reason is used, so nothing the caller typed reaches the store or the log.
         var known = PostModeration.Canonical(reason)
                     ?? throw new ArgumentException($"Reason must be one of: {string.Join(", ", PostModeration.Reasons)}.", nameof(reason));
-        return ApplyAsync(postId, actor, titleName, ct, (post, now) => PostModeration.Hide(post, known, now), "hide", known);
+        return ApplyAsync(postId, actor, titleName, ModerationAction.Hide, known, (post, now) => PostModeration.Hide(post, known, now), ct);
     }
 
     /// <summary>Null when there is no such post.</summary>
     public Task<ModerationResultDto?> RestoreAsync(int postId, string actor, CancellationToken ct = default)
-        => ApplyAsync(postId, actor, null, ct, (post, _) => PostModeration.Restore(post), "restore", null);
+        => ApplyAsync(postId, actor, null, ModerationAction.Restore, null, (post, _) => PostModeration.Restore(post), ct);
 
-    private async Task<ModerationResultDto?> ApplyAsync(int postId, string actor, string? titleName, CancellationToken ct,
-        Func<SocialPost, DateTime, bool> change, string action, string? reason)
+    /// <summary>
+    /// Runs one hide or restore under the title's pull gate (so it never races a live pull of the same title), logs it in
+    /// ModerationActions and recomputes the score. <paramref name="change"/> returns false when there was nothing to do.
+    /// </summary>
+    private async Task<ModerationResultDto?> ApplyAsync(int postId, string actor, string? titleName, string action, string? reason,
+        Func<SocialPost, DateTime, bool> change, CancellationToken ct)
     {
         var key = await _db.SocialPosts.Where(p => p.Id == postId).Select(p => new { p.MediaType, p.TmdbId }).SingleOrDefaultAsync(ct);
         if (key is null) return null;
@@ -59,10 +64,10 @@ public sealed class ModerationService
                 PostId = post.Id,
                 MediaType = post.MediaType,
                 TmdbId = post.TmdbId,
-                TitleName = Trim(titleName ?? await LastTitleNameAsync(post, ct), 200),
+                TitleName = (titleName ?? await LastTitleNameAsync(post, ct)).Clip(200),
                 Action = action,
                 Reason = reason,
-                Actor = Trim(actor, 200)
+                Actor = actor.Clip(200)
             });
             meter = await _recomputer.RecomputeAsync(post.MediaType, post.TmdbId, now, ct);
             await _db.SaveChangesAsync(ct);
@@ -112,7 +117,7 @@ public sealed class ModerationService
                 TitleName = a.TitleName,
                 Platform = p?.Platform,
                 Author = p?.Author,
-                Excerpt = p is null ? null : Trim(p.Content.ReplaceLineEndings(" "), 200),
+                Excerpt = p is null ? null : p.Content.ReplaceLineEndings(" ").Clip(200),
                 SourceUrl = p?.SourceUrl,
                 CurrentlyHidden = p?.HiddenAt is not null,
                 PostGone = p is null
@@ -125,5 +130,4 @@ public sealed class ModerationService
         await _db.ModerationActions.Where(a => a.PostId == post.Id && a.TitleName != "")
             .OrderByDescending(a => a.At).Select(a => a.TitleName).FirstOrDefaultAsync(ct) ?? "";
 
-    private static string Trim(string s, int max) => s.Length <= max ? s : s[..max];
 }

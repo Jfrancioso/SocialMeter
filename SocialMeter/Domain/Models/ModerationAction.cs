@@ -20,8 +20,11 @@ public sealed class ModerationAction
     /// <summary>The title's name at the time, so the log reads without a lookup. Empty when the caller did not send it.</summary>
     public string TitleName { get; set; } = "";
 
-    /// <summary>"hide" or "restore".</summary>
+    /// <summary>"hide" or "restore" (<see cref="Hide"/>, <see cref="Restore"/>). The admin page reads these words too.</summary>
     public string Action { get; set; } = "";
+
+    public const string Hide = "hide";
+    public const string Restore = "restore";
 
     /// <summary>The reason given when hiding (see PostModeration.Reasons); null for a restore.</summary>
     public string? Reason { get; set; }
