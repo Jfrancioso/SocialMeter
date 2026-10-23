@@ -140,7 +140,9 @@ workspace `socialmeter-jf-logs` (0.2 GB daily cap, 30 days), Application Insight
 The front end is a single-page app, so without help every URL arrives as the same empty page titled "Chatterbub".
 Three pieces fix that (2026-10-23):
 
-- **The edge Worker `chatterbub-seo`** (UI repo, `edge/seo-worker/`, its README has the details and commands) runs on
+- **The edge Worker `chatterbub-seo`** (live since 2026-10-23; UI repo, `edge/seo-worker/`, its README has the details
+  and commands; deploy token in Key Vault as `cloudflare-workers-token`, limited to Workers Scripts edit, Workers Routes
+  edit, Account Settings read and Workers Tail read) runs on
   `chatterbub.com/title/*` and `chatterbub.com/sitemap.xml`. For a title page it writes the real title, description,
   link-preview image, canonical URL, schema.org data and a short text block into the first HTML, and answers 404 for
   titles that do not exist. It reads only cached readings (never a paid pull) and fails open. Rollback:
