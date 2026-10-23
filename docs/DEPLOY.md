@@ -58,8 +58,10 @@ cd C:\Users\JoeFr\source\repos\SocialMeter
 ```
 
 Pick a prefix that is globally unique (it becomes part of hostnames). The script prompts once for a SQL admin
-password and never prints it or any key. It then stores the App Service publish profile and the Static Web Apps token as
-GitHub secrets and the names as repository variables, which the deploy workflows read.
+password and never prints it or any key. It builds the private network, creates the deploy identity and its GitHub
+trust, turns password deploys off, and stores the identity's ids and the app names as repository variables (no secrets)
+in the API repo and the Static Web Apps token as a secret in the UI repo. Running it sends `chatterbub-access-changed`
+and `chatterbub-app-changed` emails once the alerts exist; that is expected.
 
 ## Every deploy after that
 
@@ -86,7 +88,8 @@ Manual deploy of the current `main`: Actions → Deploy → Run workflow.
 | Secrets | GitHub secret scanning with push protection, both repos | A push containing a known token format is blocked |
 
 Dependabot version bumps wait 14 days after a release (`cooldown` in `dependabot.yml`); security fixes do not wait. The
-ZAP scan is passive only.
+ZAP scan is passive only. Never run an active scan against production: it sends attack payloads, spends the refresh
+budget and writes to the database. Run one against a local copy if needed.
 
 Hardening added 2026-10-23:
 
@@ -98,8 +101,8 @@ Hardening added 2026-10-23:
 | Scanner-path block | zone custom rule "Scanner paths..." | `/.anything` (except `/.well-known/`), `.env`, `.git`, `*.php`, `appsettings.json`, `config.json` and friends answer 403 at Cloudflare and never reach Azure. |
 | DNSSEC | Cloudflare DNS (registrar is Cloudflare, so the DS record is published automatically) | Stops forged DNS answers for chatterbub.com. |
 | SPF `v=spf1 -all` and DMARC `p=reject` | apex and `_dmarc` TXT records | The domain sends no mail, so mail claiming to be from it is rejected. **When Cloudflare Email Routing is turned on for privacy@, merge its SPF include into the same record** (one SPF record per name). |
-| Azure change alerts | activity-log alerts `chatterbub-access-changed`, `chatterbub-app-changed`, `chatterbub-resource-deleted` | Email when access is granted, app settings or deploy credentials change, or anything is deleted (OPERATIONS.md). Free. | Never run an active scan against production: it sends attack payloads, spends the refresh
-budget and writes to the database. Run one against a local copy if needed.
+| Azure change alerts | activity-log alerts `chatterbub-access-changed`, `chatterbub-app-changed`, `chatterbub-resource-deleted` | Email when access is granted, app settings or deploy credentials change, or anything is deleted (OPERATIONS.md). Free. |
+| Password-free API deploys (OIDC) | managed identity `socialmeter-jf-deploy`, `.github/workflows/deploy.yml` | GitHub's short-lived token is trusted only for this repo's `production` environment, matched by owner and repo **id** (`repo:Jfrancioso@22113481/SocialMeter@1428771885:environment:production`; GitHub sends ids, and a name-only subject is refused with AADSTS700213). The identity's only permission is Website Contributor on the API app. Kudu and FTP password logins are off and the publish profile secret is deleted: the API repo stores no secrets. The UI still deploys with the Static Web Apps token (that service has no equivalent here). |
 
 ## Configuration in production
 

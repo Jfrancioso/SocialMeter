@@ -13,8 +13,9 @@
 
   Secrets come from the API project's local user secrets (dotnet user-secrets): the API keys become Web App
   application settings, and Sql:AdminPassword is the database admin password (prompted for if absent). Nothing is
-  printed. The GitHub repositories get the publish profile / deployment token as secrets and the app names as
-  variables, which is what .github/workflows/deploy.yml in each repo expects.
+  printed. The API repository gets the deploy identity's ids as variables (its deploy signs in with OIDC, no secret);
+  the UI repository gets the Static Web App deployment token as a secret. That is what .github/workflows/deploy.yml in
+  each repo expects.
 
 .PARAMETER Prefix
   Globally unique name prefix for the resources (lowercase letters, digits, hyphens), e.g. "socialmeter-jf".
@@ -124,9 +125,6 @@ if (-not (Test-Az webapp show --name $webapp --resource-group $rg)) {
   Invoke-Az webapp create --name $webapp --resource-group $rg --plan $plan --runtime "DOTNETCORE:8.0" --output none | Out-Null
 }
 Invoke-Az webapp config set --name $webapp --resource-group $rg --always-on true --output none | Out-Null
-# New App Service apps ship with basic publishing credentials disabled; the publish-profile deploy in GitHub Actions needs them.
-Invoke-Az resource update --resource-group $rg --name scm --namespace Microsoft.Web --resource-type basicPublishingCredentialsPolicies `
-  --parent "sites/$webapp" --set properties.allow=true --output none | Out-Null
 # Client affinity off: one stateless instance needs no sticky sessions, and it would set ARRAffinity cookies on every response.
 Invoke-Az webapp update --name $webapp --resource-group $rg --https-only true --client-affinity-enabled false --output none | Out-Null
 Invoke-Az webapp config connection-string set --name $webapp --resource-group $rg --connection-string-type SQLAzure `
@@ -143,6 +141,29 @@ if (-not $subnetId) {
 $webappId = (Invoke-Az webapp show --name $webapp --resource-group $rg --query id --output tsv).Trim()
 Invoke-Az resource update --ids $webappId --set properties.outboundVnetRouting.applicationTraffic=false --output none | Out-Null
 Invoke-Az sql server update --name $sqlSrv --resource-group $rg --enable-public-network false --output none | Out-Null
+
+# ---- Deploys without a stored password: GitHub's OIDC token, trusted only for the API repo's production environment ----
+$deployId = "$Prefix-deploy"
+Write-Host "==> Deploy identity $deployId (GitHub OIDC; Website Contributor on $webapp only)"
+if (-not (Test-Az identity show --name $deployId --resource-group $rg)) {
+  Invoke-Az identity create --name $deployId --resource-group $rg --location $Location --output none | Out-Null
+}
+$identity = Invoke-Az identity show --name $deployId --resource-group $rg --output json | ConvertFrom-Json
+# GitHub's token names the owner and the repository by name and by immutable id. The ids matter: a repository that is
+# deleted and re-created under the same name by someone else gets a new id, so the trust does not carry over.
+$owner, $repoName = $ApiRepo.Split('/')
+$ownerId = (gh api "repos/$ApiRepo" --jq .owner.id).Trim()
+$repoId = (gh api "repos/$ApiRepo" --jq .id).Trim()
+$subject = "repo:$owner@$ownerId/$repoName@$($repoId):environment:production"
+$fedVerb = if (Test-Az identity federated-credential show --name github-production --identity-name $deployId --resource-group $rg) { "update" } else { "create" }
+Invoke-Az identity federated-credential $fedVerb --name github-production --identity-name $deployId --resource-group $rg `
+  --issuer https://token.actions.githubusercontent.com --subject $subject --audiences api://AzureADTokenExchange --output none | Out-Null
+Invoke-Az role assignment create --assignee-object-id $identity.principalId --assignee-principal-type ServicePrincipal `
+  --role "Website Contributor" --scope $webappId --output none | Out-Null
+# With the identity in place, password-based deploys (Kudu and FTP basic auth, the publish profile) stay off.
+foreach ($policy in "scm", "ftp") {
+  Invoke-Az resource update --ids "$webappId/basicPublishingCredentialsPolicies/$policy" --set properties.allow=false --output none | Out-Null
+}
 
 # ---- Front end: Static Web App (Free) ----
 Write-Host "==> Static Web App $swa"
@@ -169,9 +190,11 @@ Invoke-Az webapp config appsettings set --name $webapp --resource-group $rg --se
 
 # ---- GitHub: the deploy workflows read these ----
 Write-Host "==> GitHub secrets and variables"
-$publishProfile = Invoke-Az webapp deployment list-publishing-profiles --name $webapp --resource-group $rg --xml
-$publishProfile | gh secret set AZURE_WEBAPP_PUBLISH_PROFILE --repo $ApiRepo
+# The API deploy signs in with OIDC, so it needs ids, not secrets.
 gh variable set AZURE_WEBAPP_NAME --repo $ApiRepo --body $webapp
+gh variable set AZURE_CLIENT_ID --repo $ApiRepo --body $identity.clientId
+gh variable set AZURE_TENANT_ID --repo $ApiRepo --body $identity.tenantId
+gh variable set AZURE_SUBSCRIPTION_ID --repo $ApiRepo --body ((Invoke-Az account show --query id --output tsv).Trim())
 
 $swaToken = (Invoke-Az staticwebapp secrets list --name $swa --resource-group $rg --query properties.apiKey --output tsv).Trim()
 $swaToken | gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN --repo $UiRepo

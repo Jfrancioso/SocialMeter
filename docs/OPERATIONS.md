@@ -24,7 +24,7 @@ spending. DEPLOY.md covers how the pieces are deployed; this covers keeping them
 | Server errors | HTTP 5xx answers and errors logged by the app | more than 5 in 15 minutes | `chatterbub-server-errors` (severity 1) |
 | Guardrails | the log line `Guardrail tripped: {Guardrail}` | any trip except the hourly cap; one alert per guardrail | `chatterbub-guardrails` (severity 2) |
 | Access granted | Azure's activity log, whole subscription | anyone is given a role anywhere | `chatterbub-access-changed` |
-| Settings changed | Azure's activity log, socialmeter-jf-rg | app settings, deploy credentials or the publish profile, deploy identities, custom domains, database firewall, Key Vault, the alert email | `chatterbub-app-changed` |
+| Settings changed | Azure's activity log, socialmeter-jf-rg | app settings, deploy credentials (password deploys are off; turning them on shows here), deploy identities and their GitHub trust, custom domains, database firewall, Key Vault, the alert email | `chatterbub-app-changed` |
 | Something deleted | Azure's activity log, socialmeter-jf-rg | the app, plan, database, Key Vault, monitoring or any alert rule | `chatterbub-resource-deleted` |
 
 The error and guardrail rules stay quiet for an hour after they fire, so a bad evening is a few emails, not a flood.
