@@ -115,6 +115,8 @@ public class AdminAccessTests
     public void Sign_in_returns_only_to_the_admin_page(string? returnTo, bool expected)
     {
         var origins = new[] { "https://chatterbub.com", "https://www.chatterbub.com", "http://localhost:5173" };
-        Assert.Equal(expected, AdminController.IsSafeReturn(returnTo, origins));
+        var origin = AdminController.SafeReturnOrigin(returnTo, origins);
+        Assert.Equal(expected, origin is not null);
+        if (origin is not null) Assert.Contains(origin, origins);   // the configured value, never the request's text
     }
 }

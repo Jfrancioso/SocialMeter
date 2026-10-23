@@ -15,7 +15,10 @@ public static class PostModeration
     /// <summary>How a hidden post is described in the public "set aside" counts.</summary>
     public const string PublicReason = "removed by a moderator";
 
-    public static bool IsValidReason(string? reason) => reason is not null && Reasons.Contains(reason);
+    public static bool IsValidReason(string? reason) => Canonical(reason) is not null;
+
+    /// <summary>The matching entry of <see cref="Reasons"/> (our own string, not the caller's), or null.</summary>
+    public static string? Canonical(string? reason) => Reasons.FirstOrDefault(r => r == reason);
 
     /// <summary>Hides the post. Returns false when it was already hidden (nothing changes).</summary>
     public static bool Hide(SocialPost post, string reason, DateTime nowUtc)

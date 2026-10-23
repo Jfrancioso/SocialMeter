@@ -28,9 +28,10 @@ public sealed class ModerationService
     /// <summary>Null when there is no such post.</summary>
     public Task<ModerationResultDto?> HideAsync(int postId, string reason, string? titleName, string actor, CancellationToken ct = default)
     {
-        if (!PostModeration.IsValidReason(reason))
-            throw new ArgumentException($"Reason must be one of: {string.Join(", ", PostModeration.Reasons)}.", nameof(reason));
-        return ApplyAsync(postId, actor, titleName, ct, (post, now) => PostModeration.Hide(post, reason, now), "hide", reason);
+        // From here on only our own copy of the reason is used, so nothing the caller typed reaches the store or the log.
+        var known = PostModeration.Canonical(reason)
+                    ?? throw new ArgumentException($"Reason must be one of: {string.Join(", ", PostModeration.Reasons)}.", nameof(reason));
+        return ApplyAsync(postId, actor, titleName, ct, (post, now) => PostModeration.Hide(post, known, now), "hide", known);
     }
 
     /// <summary>Null when there is no such post.</summary>

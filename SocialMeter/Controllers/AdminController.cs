@@ -33,26 +33,31 @@ public sealed class AdminController : ControllerBase
 
     /// <summary>
     /// The page sends the operator here to sign in: Cloudflare Access intercepts the request, asks for the one-time code,
-    /// then lets it through with its cookie set for this host, and we send them back to the admin page. Only addresses on
-    /// the site's own origins under /admin are accepted, so this can never be used to bounce someone to another site.
+    /// then lets it through with its cookie set for this host, and we send them back to the admin page. The address we
+    /// send them to is rebuilt from configuration (the matching site origin + /admin), never echoed from the request, so
+    /// this can never be used to bounce someone to another site.
     /// </summary>
     [HttpGet("sign-in")]
     public IActionResult SignIn([FromQuery] string? returnTo) =>
-        IsSafeReturn(returnTo, Web.DependencyInjection.AllowedOrigins(_configuration))
-            ? Redirect(returnTo!)
+        SafeReturnOrigin(returnTo, Web.DependencyInjection.AllowedOrigins(_configuration)) is { } origin
+            ? Redirect($"{origin}/admin")
             : BadRequest(new ProblemDetails { Status = 400, Title = "returnTo must be the site's /admin page" });
 
-    /// <summary>An absolute https (or localhost) address on one of the site's origins whose path is /admin or below.</summary>
-    public static bool IsSafeReturn(string? returnTo, IEnumerable<string> origins)
+    /// <summary>
+    /// For an absolute https (or localhost) address on one of the site's origins whose path is /admin or below: that
+    /// origin as configured. Otherwise null.
+    /// </summary>
+    public static string? SafeReturnOrigin(string? returnTo, IEnumerable<string> origins)
     {
-        if (string.IsNullOrWhiteSpace(returnTo) || !Uri.TryCreate(returnTo, UriKind.Absolute, out var uri)) return false;
-        if (uri.Scheme != Uri.UriSchemeHttps && !(uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)) return false;
-        if (!string.IsNullOrEmpty(uri.UserInfo)) return false;
+        if (string.IsNullOrWhiteSpace(returnTo) || !Uri.TryCreate(returnTo, UriKind.Absolute, out var uri)) return null;
+        if (uri.Scheme != Uri.UriSchemeHttps && !(uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)) return null;
+        if (!string.IsNullOrEmpty(uri.UserInfo)) return null;
+
+        var path = uri.AbsolutePath;
+        if (path != "/admin" && !path.StartsWith("/admin/", StringComparison.Ordinal)) return null;
 
         var origin = uri.GetLeftPart(UriPartial.Authority);
-        var onSite = origins.Any(o => string.Equals(o.TrimEnd('/'), origin, StringComparison.OrdinalIgnoreCase));
-        var path = uri.AbsolutePath;
-        return onSite && (path == "/admin" || path.StartsWith("/admin/", StringComparison.Ordinal));
+        return origins.Select(o => o.TrimEnd('/')).FirstOrDefault(o => string.Equals(o, origin, StringComparison.OrdinalIgnoreCase));
     }
 
     [HttpPost("posts/{id:int}/hide")]
