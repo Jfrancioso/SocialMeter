@@ -24,6 +24,9 @@ public interface IPostQueries
     Task<IReadOnlyDictionary<string, SnapshotDto>> GetSnapshotsAsync(IEnumerable<(MediaType MediaType, int TmdbId)> keys, CancellationToken ct = default);
 
     Task<ScoreHistoryDto> GetHistoryAsync(MediaType mediaType, int tmdbId, int days, CancellationToken ct = default);
+
+    /// <summary>Titles by counted posts created since <paramref name="since"/>, most first, with their reading's confidence.</summary>
+    Task<IReadOnlyList<SocialMeter.Application.Home.TalkedAbout>> GetMostTalkedAboutAsync(DateTime since, int minPosts, int take, CancellationToken ct = default);
 }
 
 /// <summary>

@@ -52,6 +52,30 @@ public sealed class PostQueryService : IPostQueries
             page, (int)Math.Ceiling(total / (double)pageSize), total);
     }
 
+    public async Task<IReadOnlyList<SocialMeter.Application.Home.TalkedAbout>> GetMostTalkedAboutAsync(DateTime since, int minPosts, int take, CancellationToken ct = default)
+    {
+        // Counted posts only: off-topic, untrusted and duplicate posts are excluded, so this is real conversation.
+        var counts = await _db.SocialPosts
+            .Where(p => !p.Excluded && p.CreatedAt >= since)
+            .GroupBy(p => new { p.MediaType, p.TmdbId })
+            .Select(g => new { g.Key.MediaType, g.Key.TmdbId, Posts = g.Count() })
+            .Where(x => x.Posts >= minPosts)
+            .OrderByDescending(x => x.Posts)
+            .Take(Math.Clamp(take, 1, 50))
+            .ToListAsync(ct);
+        if (counts.Count == 0)
+            return Array.Empty<SocialMeter.Application.Home.TalkedAbout>();
+
+        var ids = counts.Select(c => c.TmdbId).Distinct().ToList();
+        var confidence = (await _db.TitleSnapshots.Where(s => ids.Contains(s.TmdbId)).ToListAsync(ct))
+            .ToDictionary(s => (s.MediaType, s.TmdbId), s => s.Confidence);
+
+        return counts
+            .Select(c => new SocialMeter.Application.Home.TalkedAbout(c.MediaType, c.TmdbId, c.Posts,
+                confidence.TryGetValue((c.MediaType, c.TmdbId), out var conf) ? conf : 0))
+            .ToList();
+    }
+
     public async Task<IReadOnlyDictionary<string, SnapshotDto>> GetSnapshotsAsync(IEnumerable<(MediaType MediaType, int TmdbId)> keys, CancellationToken ct = default)
     {
         var list = keys.Distinct().ToList();

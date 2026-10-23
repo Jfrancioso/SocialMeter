@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Home;
 using SocialMeter.Contracts.Home;
 using SocialMeter.Domain.Models;
+using SocialMeter.Options;
 
 namespace SocialMeter.Controllers;
 
@@ -12,15 +15,24 @@ public sealed class HomeController : ControllerBase
 {
     private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(5);
 
+    private static readonly TimeSpan FeaturedCacheFor = TimeSpan.FromMinutes(15);
+
     private readonly ITitleService _titles;
     private readonly ITitleTracker _tracker;
+    private readonly IPostQueries _queries;
+    private readonly SocialMeterOptions _options;
     private readonly IMemoryCache _cache;
+    private readonly ILogger<HomeController> _logger;
 
-    public HomeController(ITitleService titles, ITitleTracker tracker, IMemoryCache cache)
+    public HomeController(ITitleService titles, ITitleTracker tracker, IPostQueries queries, IOptions<SocialMeterOptions> options,
+        IMemoryCache cache, ILogger<HomeController> logger)
     {
         _titles = titles;
         _tracker = tracker;
+        _queries = queries;
+        _options = options.Value;
         _cache = cache;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -46,7 +58,7 @@ public sealed class HomeController : ControllerBase
 
         var trending = trendingTask.Result;
         var (seasonLabel, seasonSubtitle, seasonItems) = seasonalTask.Result;
-        var featured = trending.Items.FirstOrDefault(t => t.BackdropPath.Length > 0) ?? trending.Items.FirstOrDefault();
+        var (featured, featuredLabel, featuredPosts) = await PickFeaturedAsync(trending.Items, ct);
 
         // Seasonal top rows (October's horror pair) come before everything else; the rest of the page keeps its order.
         var rows = seasonalTopTask.Result
@@ -66,9 +78,54 @@ public sealed class HomeController : ControllerBase
 
         await _tracker.AnnotateAsync(rows.SelectMany(r => r.Items).Concat(featured is null ? [] : [featured]), ct);
 
-        var response = new HomeResponseDto { Featured = featured, Rows = rows.Where(r => r.Items.Count > 0).ToList() };
+        var response = new HomeResponseDto
+        {
+            Featured = featured,
+            FeaturedLabel = featuredLabel,
+            FeaturedPosts = featuredPosts,
+            FeaturedWindowDays = _options.FeaturedWindowDays,
+            Rows = rows.Where(r => r.Items.Count > 0).ToList()
+        };
         _cache.Set(key, response, CacheFor);
         return Ok(response);
+    }
+
+    /// <summary>
+    /// The hero: the tracked movie or show people are actually posting about (see <see cref="FeaturedPick"/>), else TMDB's
+    /// trending pick, labelled as TMDB's. The post counts change only when titles are pulled, so they are cached briefly.
+    /// </summary>
+    private async Task<(Title? Title, string Label, int? Posts)> PickFeaturedAsync(IReadOnlyList<Title> trending, CancellationToken ct)
+    {
+        try
+        {
+            var candidates = await _cache.GetOrCreateAsync("home:most-talked-about", entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = FeaturedCacheFor;
+                var since = DateTime.UtcNow.AddDays(-Math.Clamp(_options.FeaturedWindowDays, 1, 14));
+                return _queries.GetMostTalkedAboutAsync(since, Math.Max(1, _options.FeaturedMinPosts), 20, ct);
+            }) ?? Array.Empty<TalkedAbout>();
+
+            var tracked = new HashSet<(MediaType, int)>();
+            foreach (var c in candidates)
+                if (await _tracker.GetReasonAsync(c.MediaType, c.TmdbId, ct) is not null)
+                    tracked.Add((c.MediaType, c.TmdbId));
+
+            foreach (var pick in FeaturedPick.Eligible(candidates, c => tracked.Contains((c.MediaType, c.TmdbId)),
+                         _options.FeaturedMinPosts, _options.FeaturedMinConfidence))
+            {
+                var title = await _titles.GetDetailsAsync(pick.MediaType, pick.TmdbId, ct);
+                if (title is { BackdropPath.Length: > 0 })
+                    return (title, FeaturedPick.MostTalkedAbout, pick.Posts);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A slow or paused database must not take the home page down; TMDB's pick still works.
+            _logger.LogWarning(ex, "Most-talked-about lookup failed; featuring TMDB's trending pick");
+        }
+
+        var fallback = trending.FirstOrDefault(t => t.BackdropPath.Length > 0) ?? trending.FirstOrDefault();
+        return (fallback, FeaturedPick.TrendingOnTmdb, null);
     }
 
     /// <summary>Steam is a second provider; if it is down the home page should still render the TMDB rows.</summary>

@@ -114,4 +114,13 @@ public sealed class SocialMeterOptions
 
     /// <summary>Refresh-log rows (title, time, outcome; nothing about the visitor) are deleted after this many days.</summary>
     public int RefreshLogRetentionDays { get; set; } = 90;
+
+    /// <summary>The home page leads with the tracked title with the most counted posts over this many days...</summary>
+    public int FeaturedWindowDays { get; set; } = 3;
+
+    /// <summary>...as long as it has at least this many counted posts in the window...</summary>
+    public int FeaturedMinPosts { get; set; } = 10;
+
+    /// <summary>...and its reading's confidence (0-1, how much of the score is posts rather than the pull toward 50) is at least this.</summary>
+    public double FeaturedMinConfidence { get; set; } = 0.6;
 }
