@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using SocialMeter.Options;
+using SocialMeter.Web.Auth;
 
 namespace SocialMeter.Web;
 
@@ -11,12 +12,16 @@ public static class DependencyInjection
 {
     public const string CorsPolicy = "Frontend";
 
+    /// <summary>The admin controller's CORS policy: the same origins, but it lets the browser send the Cloudflare Access cookie.</summary>
+    public const string AdminCorsPolicy = "Admin";
+
     /// <summary>Rate-limit policy for the endpoints that return bulk data (post feed, explanations, history, batch snapshots, search).</summary>
     public const string ReadsPolicy = "reads";
 
     public static IServiceCollection AddWeb(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<AdminOptions>(configuration.GetSection(AdminOptions.SectionName));
+        services.AddCloudflareAccess(configuration);
 
         services
             .AddControllers()
@@ -55,9 +60,14 @@ public static class DependencyInjection
                     _ => new SlidingWindowRateLimiterOptions { PermitLimit = Math.Max(1, limits.ReadsPerMinute), Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 4, QueueLimit = 0 }));
         });
 
-        // Origins come from configuration (Cors:AllowedOrigins) so production is not hard-coded; no credentials until there is a session.
-        var origins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? new[] { "http://localhost:5173" };
-        services.AddCors(options => options.AddPolicy(CorsPolicy, policy => policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod()));
+        // Origins come from configuration (Cors:AllowedOrigins) so production is not hard-coded. Public endpoints never take
+        // credentials; only the admin controller's policy does, for the Cloudflare Access cookie.
+        var origins = AllowedOrigins(configuration);
+        services.AddCors(options =>
+        {
+            options.AddPolicy(CorsPolicy, policy => policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod());
+            options.AddPolicy(AdminCorsPolicy, policy => policy.WithOrigins(origins).AllowAnyHeader().WithMethods("GET", "POST").AllowCredentials());
+        });
 
         return services;
     }
@@ -99,4 +109,8 @@ public static class DependencyInjection
     }
 
     private static string ClientKey(HttpContext ctx) => ClientAddress.For(ctx);
+
+    /// <summary>The site's own origins (Cors:AllowedOrigins), or the Vite dev server when none are configured.</summary>
+    public static string[] AllowedOrigins(IConfiguration configuration) =>
+        configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? new[] { "http://localhost:5173" };
 }

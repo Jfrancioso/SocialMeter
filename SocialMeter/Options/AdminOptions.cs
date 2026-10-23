@@ -12,5 +12,11 @@ public sealed class AdminOptions
 
     public string ApiKey { get; set; } = "";
 
+    /// <summary>
+    /// Emails allowed into the admin area when signed in through Cloudflare Access (Admin:Emails:0, ...). Kept in App
+    /// Service settings, not appsettings, because the repository is public. Empty admits nobody through Access.
+    /// </summary>
+    public string[] Emails { get; set; } = Array.Empty<string>();
+
     public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey);
 }

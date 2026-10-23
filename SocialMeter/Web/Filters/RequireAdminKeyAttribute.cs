@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Options;
@@ -24,9 +22,7 @@ public sealed class RequireAdminKeyAttribute : Attribute, IAsyncAuthorizationFil
             return Task.CompletedTask;
         }
 
-        var presented = context.HttpContext.Request.Headers[AdminOptions.HeaderName].FirstOrDefault() ?? "";
-        var ok = CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(presented), Encoding.UTF8.GetBytes(options.ApiKey));
-        if (!ok)
+        if (!AdminKey.Matches(context.HttpContext.Request.Headers[AdminOptions.HeaderName].FirstOrDefault(), options))
             context.Result = new UnauthorizedObjectResult(new ProblemDetails { Status = 401, Title = "Admin key required" });
 
         return Task.CompletedTask;

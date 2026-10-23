@@ -1,4 +1,5 @@
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Moderation;
 using SocialMeter.Application.Ratings;
 using SocialMeter.Application.Social;
 using SocialMeter.Application.Titles;
@@ -25,6 +26,8 @@ public static class DependencyInjection
         services.AddScoped<PostIngestionService>();
         services.AddScoped<ScoreHistoryService>();
         services.AddScoped<DeletionSyncService>();
+        services.AddScoped<TitleRecomputer>();
+        services.AddScoped<ModerationService>();
 
         // Policies and guards: stateless or process-wide, so singletons.
         services.AddSingleton<TrustPolicy>();

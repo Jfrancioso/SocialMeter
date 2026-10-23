@@ -93,7 +93,7 @@ public sealed partial class TrustPolicy
     {
         foreach (var p in posts.Where(p => p.Excluded && p.ExclusionReason is not null && CrossPostReasons.Contains(p.ExclusionReason)))
         {
-            p.Excluded = false;
+            p.Excluded = p.Hidden;   // a post an operator hid stays out
             p.ExclusionReason = null;
         }
 

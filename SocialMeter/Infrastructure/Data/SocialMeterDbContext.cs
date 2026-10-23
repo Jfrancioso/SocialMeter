@@ -16,6 +16,7 @@ public class SocialMeterDbContext : DbContext
     public DbSet<TrackedTitle> TrackedTitles => Set<TrackedTitle>();
     public DbSet<ScoreHistory> ScoreHistory => Set<ScoreHistory>();
     public DbSet<RefreshLog> RefreshLogs => Set<RefreshLog>();
+    public DbSet<ModerationAction> ModerationActions => Set<ModerationAction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -38,6 +39,7 @@ public class SocialMeterDbContext : DbContext
             entity.Property(e => e.Analyzer).IsRequired().HasMaxLength(20);
             entity.Property(e => e.AnalyzerNote).HasMaxLength(120);
             entity.Property(e => e.ExclusionReason).HasMaxLength(60);
+            entity.Property(e => e.HiddenReason).HasMaxLength(20);
             entity.Property(e => e.SourceUrl).HasMaxLength(500);
             entity.Property(e => e.Community).HasMaxLength(100);
 
@@ -71,6 +73,18 @@ public class SocialMeterDbContext : DbContext
             entity.Property(e => e.Trigger).IsRequired().HasMaxLength(10);
             entity.Property(e => e.Outcome).IsRequired().HasMaxLength(20);
             entity.HasIndex(e => e.At).HasDatabaseName("IX_RefreshLogs_At");
+        });
+
+        modelBuilder.Entity<ModerationAction>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.MediaType).HasConversion<string>().HasMaxLength(10).IsRequired();
+            entity.Property(e => e.TitleName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Action).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.Reason).HasMaxLength(20);
+            entity.Property(e => e.Actor).IsRequired().HasMaxLength(200);
+            entity.HasIndex(e => e.At).HasDatabaseName("IX_ModerationActions_At");
+            entity.HasIndex(e => e.PostId).HasDatabaseName("IX_ModerationActions_PostId");
         });
 
         modelBuilder.Entity<TitleSnapshot>(entity =>

@@ -150,6 +150,7 @@ public sealed class PostIngestionService
         post.TrustWeight = trust.Weight;
         if (trust.Excluded) { post.Excluded = true; post.ExclusionReason = trust.ExclusionReason; }
         else if (post.ExclusionReason is TrustPolicy.ReasonTooNew or TrustPolicy.ReasonTooShort) { post.Excluded = false; post.ExclusionReason = null; }
+        post.Excluded |= post.Hidden;   // an operator's removal outlasts any re-check
         return false;
     }
 
@@ -205,6 +206,9 @@ public sealed class PostIngestionService
             post.Excluded = false;
             post.ExclusionReason = null;
         }
+
+        // An operator's removal outlasts any re-read.
+        post.Excluded |= post.Hidden;
     }
 
     private static SocialPostCandidate ToCandidate(SocialPost p) => new(

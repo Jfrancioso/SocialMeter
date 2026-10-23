@@ -67,6 +67,23 @@ curl -X POST https://<api-host>/api/operator/tracked/refresh -H "X-Admin-Key: <k
 
 The key is the `Admin__ApiKey` application setting (copied from your local user secrets).
 
+## Admin area and moderation
+
+`https://chatterbub.com/admin` (not linked anywhere) shows the moderation log; on title pages a signed-in admin gets a
+Remove button on every post (reasons: sensitive, spam, off-topic, wrong-title, other). A removal takes the post out of
+the feed and the score at once (recomputed from stored posts, no model calls), survives every later refresh and rescore,
+and can be undone from the card or the log. Each step is recorded in `ModerationActions` with who, when and why.
+
+Sign-in is Cloudflare Access (Zero Trust, free plan) on `api.chatterbub.com/api/admin`: the page sends the operator to
+`/api/admin/sign-in`, Cloudflare asks for a one-time code, and the API sends them back to `/admin`. The API then checks
+Cloudflare's token itself on every call (`Cf-Access-Jwt-Assertion`: signature, issuer, audience, expiry) and admits only
+emails in `Admin__Emails__0..n`. App Service settings: `CloudflareAccess__TeamDomain` (`https://<team>.cloudflareaccess.com`),
+`CloudflareAccess__Audience` (the Access application's AUD tag), `Admin__Emails__0`. The Access application must have
+"Bypass options requests to origin" on, because browsers send CORS preflights without cookies; the API answers them.
+`X-Admin-Key` also works on `/api/admin` for scripts, but in production Cloudflare Access stands in front of the path.
+
+Local development has no Access: the admin page asks for the admin key and keeps it in the tab's session storage.
+
 ## Rollback
 
 App Service keeps the previous deployment: Deployment Center → select the earlier run → Redeploy. Or revert the commit

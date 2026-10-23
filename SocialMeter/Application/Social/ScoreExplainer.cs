@@ -62,7 +62,7 @@ public sealed class ScoreExplainer : IScoreExplainer
             .ToList();
 
         var filtered = all.Where(p => p.Excluded)
-            .GroupBy(p => p.ExclusionReason ?? "set aside")
+            .GroupBy(p => p.Hidden ? Moderation.PostModeration.PublicReason : p.ExclusionReason ?? "set aside")
             .Select(g => new ReasonCountDto { Reason = g.Key, Count = g.Count() })
             .OrderByDescending(r => r.Count)
             .ToList();

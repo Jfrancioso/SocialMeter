@@ -53,7 +53,21 @@ public sealed class SocialPost
 
     /// <summary>Excluded posts are kept for auditing but never count toward the score or show in the feed.</summary>
     public bool Excluded { get; set; }
+
+    /// <summary>The filters' reason for excluding the post; null when they let it count. A hand removal does not touch it.</summary>
     public string? ExclusionReason { get; set; }
+
+    /// <summary>
+    /// Set when an operator hid the post by hand (see PostModeration). A hidden post stays excluded whatever the filters
+    /// later decide, until it is restored. Every writer of <see cref="Excluded"/> keeps that rule.
+    /// </summary>
+    public DateTime? HiddenAt { get; set; }
+
+    /// <summary>The reason picked when hiding: sensitive, spam, off-topic, wrong-title or other.</summary>
+    public string? HiddenReason { get; set; }
+
+    /// <summary>Hidden by an operator. Not stored; query <see cref="HiddenAt"/> in LINQ.</summary>
+    public bool Hidden => HiddenAt is not null;
 
     public int Upvotes { get; set; }
     public int Comments { get; set; }
