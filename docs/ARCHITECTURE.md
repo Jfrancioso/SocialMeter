@@ -48,6 +48,7 @@ Grouped by folder under `Application/`. `Social/` is the core:
 | `DeletionSyncService` | Operator and worker: purge what the platforms removed, prune by retention, recompute. One run at a time. |
 | `ScoreHistoryService` | One row per title per day; backfill from post dates; Mann-Kendall trend. |
 | `TrustPolicy`, `VerdictAssessor`, `SocialScoreCalculator`, `ScoreStatistics`, `SubstanceHeuristic` | Pure policies and maths. No I/O, fully unit-tested. |
+| `TitleSearchRules`, `TitleSearchPlanner` | How the sources search a title: when a name is an everyday word and which terms (cast, characters, creators, `Search:Titles` extras) must appear with it. |
 | `PullGate` | One live pull per title at a time. |
 
 The rest:

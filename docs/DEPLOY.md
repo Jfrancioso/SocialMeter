@@ -33,6 +33,11 @@ Push to `main`. The API workflow runs the tests, publishes, deploys, and checks 
 with `VITE_API_BASE` pointing at the API and deploys `dist/`. Both are visible under the Actions tab, and a failed test
 stops the deploy.
 
+**The workflow finishing is not the new code serving.** App Service keeps the old container answering until the new one
+has started, about 30-60 seconds later. Before checking a change in production, wait for the new container's startup
+lines in Application Insights ("IMDb ratings loaded", "Tracked set refreshed") or for a response that only the new
+code can give. On 2026-10-23 a verification pull sent 10 seconds after "Deploy API success" ran the old code.
+
 Manual deploy of the current `main`: Actions → Deploy → Run workflow.
 
 ## Security checks

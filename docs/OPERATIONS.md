@@ -114,6 +114,21 @@ az webapp config appsettings set -g socialmeter-jf-rg -n socialmeter-jf-api --se
 Each read is roughly the cost of one Refresh press (about $0.10–0.50, depending on how many new posts there are). Delete
 the settings once the event is over; a closed window does nothing, but the admin page lists it for a day.
 
+## When a title's posts are all filtered out
+
+Symptom: the title page says "No posts measured yet: we found N posts, but none passed our filters", and the log shows
+"Claude assessed 20 posts about X: 20 off-topic". Usually the name is an everyday word and the search found sentences that
+only contain it. Names like that are handled automatically (`TitleSearch`), but a title can be helped with hand-picked
+terms: a place, a nickname, a hashtag people really use.
+
+```bash
+az webapp config appsettings set -g socialmeter-jf-rg -n socialmeter-jf-api --settings Search__Titles__tv_124364__Terms__0=Fromville
+```
+
+The key is the type and id from the title's URL (`/title/tv/124364` gives `tv_124364`). `Search__Titles__<key>__Ambiguous`
+set to `true` or `false` forces the treatment either way. Defaults live in `appsettings.json` under `Search:Titles`.
+Before adding a term, try it free on Bluesky's own search (bsky.app, search box) and read the first page of results.
+
 ## Useful queries
 
 Azure portal > `socialmeter-jf-logs` (or `socialmeter-jf-ai`) > **Logs**.

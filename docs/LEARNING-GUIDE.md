@@ -294,6 +294,12 @@ Each social platform is one class implementing `ISocialSource` (`Platform`, `IsC
 - **X**: recent search (seven days), the title in quotes plus media words, exclusions measured against real data
   (`XOptions.ExcludeTerms`), author expansions for account age and followers, media expansions for images. Every
   returned post costs money, which is why the query is tightened and `MaxResults` is capped in development.
+- **Names that are everyday words** ("FROM", "Him", "Us", "Smile"): the media words are not enough, because "from" plus
+  "show" matches half of English. `Application/Social/TitleSearch.cs` decides when a name is ambiguous and which terms
+  pin it down (creators, top cast, main characters, plus hand-picked extras from `Search:Titles`); X and Bluesky then
+  require one of them next to the name, and a title with nothing to pin it down is not searched at all. Measured for
+  FROM on Bluesky: 276 posts and none about the show before, 8 of 8 after. **Say it back:** why are networks such as
+  "MGM+" left out of the automatic terms?
 - **Bluesky**: app-password session, keyword search over the last week, local rules pick the posts that are about the
   title before any are sent to the model. Free to read.
 - **Reddit (official, not used in production)**: OAuth client-credentials, search over a year sorted by relevance, author lookup for age and
@@ -378,9 +384,9 @@ Done since this section was first written: the spend ledger (`UsageDays`), deplo
 
 Next, in order: title page highlights (a real quote, and the words positive and negative posts mention most); per-title
 link previews and SEO; a Bluesky bot posting score moments; "Coming soon" with a separate pre-release buzz reading;
-then accounts (watchlist and score alerts), with exactly one feature that needs them. Also open: searches for titles
-whose names are common words (FROM finds posts that only contain the word "from"), and re-checking older X posts less
-often, since every daily deletion check is billed. The short form stays the same: ship what exists, tested and
+then accounts (watchlist and score alerts), with exactly one feature that needs them. Also open: re-checking older X posts
+less often, since every daily deletion check is billed. (Searches for titles whose names are common words, such as
+FROM, were fixed on 2026-10-23; see section 10.) The short form stays the same: ship what exists, tested and
 deployed, before adding more.
 
 ---
