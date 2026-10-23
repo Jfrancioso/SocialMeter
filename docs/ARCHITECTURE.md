@@ -125,7 +125,9 @@ startup, add response caching on GETs.
 
 ## Front end (socialmeter-ui)
 
-Vue 3 with the conventional split: `pages/` are routes and layout, `components/` are presentational and grouped by area
+Vue 3 with the conventional split (and, in front of it, a small Cloudflare Worker in `edge/seo-worker/` that gives
+title pages real titles, link previews and structured data before any JavaScript runs; DEPLOY.md, "Search engines").
+`pages/` are routes and layout, `components/` are presentational and grouped by area
 (`Meter/`, `Social/`, `Title/`, `Ratings/`, `Admin/`), `composables/` hold state and data loading (`useTitlePage`,
 `useSnapshots`, `useDevicePref`, `useAdmin`), `api.js` is the only place that knows URLs, `utils/` are pure helpers
 (`format`, `platforms`, `outbound`, `moderation`, `shareCard`). Each component owns its CSS

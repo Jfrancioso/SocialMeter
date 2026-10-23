@@ -135,6 +135,23 @@ workspace `socialmeter-jf-logs` (0.2 GB daily cap, 30 days), Application Insight
 `chatterbub-api-unhealthy`, `chatterbub-server-errors`, `chatterbub-guardrails`. All created with the Azure CLI on
 2026-10-23; OPERATIONS.md has the details and the queries.
 
+## Search engines and link previews
+
+The front end is a single-page app, so without help every URL arrives as the same empty page titled "Chatterbub".
+Three pieces fix that (2026-10-23):
+
+- **The edge Worker `chatterbub-seo`** (UI repo, `edge/seo-worker/`, its README has the details and commands) runs on
+  `chatterbub.com/title/*` and `chatterbub.com/sitemap.xml`. For a title page it writes the real title, description,
+  link-preview image, canonical URL, schema.org data and a short text block into the first HTML, and answers 404 for
+  titles that do not exist. It reads only cached readings (never a paid pull) and fails open. Rollback:
+  `node deploy.mjs --remove-routes`.
+- **`GET /api/seo/titles`** (`SeoController`): titles with a reading, newest first, cached for an hour. The Worker turns
+  it into the sitemap. `robots.txt` points at the sitemap.
+- **The app sets the same title and description** once it loads (`utils/pageMeta.js`), because search engines read the
+  page again after JavaScript runs. Keep `titleMeta` there and `describeTitle` in the Worker in step.
+
+Search Console and Bing Webmaster Tools are verified on the domain (DNS TXT record in Cloudflare) and have the sitemap.
+
 ## Operator actions in production
 
 ```bash
