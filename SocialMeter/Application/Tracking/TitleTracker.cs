@@ -75,9 +75,15 @@ public sealed class TitleTracker : ITitleTracker
         var rows = new List<SeasonalRow>();
         try
         {
-            var trending = await _titles.DiscoverRecentMoviesByGenreAsync(theme.MovieGenreId, days: 365, page: 1, ct);
-            if (trending.Items.Count > 0)
-                rows.Add(new SeasonalRow("horror_trending", "Horror trending now", "The scariest things people are talking about this season", trending.Items.Take(20).ToList()));
+            // TMDB supplies the candidates (two pages, so the row stays full after silent titles drop out); what people
+            // actually post decides the order. TMDB popularity alone put a lookalike release with no posts in this row.
+            var pages = await Task.WhenAll(
+                _titles.DiscoverRecentMoviesByGenreAsync(theme.MovieGenreId, days: 365, page: 1, ct),
+                _titles.DiscoverRecentMoviesByGenreAsync(theme.MovieGenreId, days: 365, page: 2, ct));
+            var candidates = pages.SelectMany(p => p.Items).ToList();
+            var ranked = ConversationRanking.Rank(candidates, await ConversationSignalsAsync(MediaType.Movie, candidates, ct), 20);
+            if (ranked.Count > 0)
+                rows.Add(new SeasonalRow("horror_trending", "Horror trending now", "The horror people are actually posting about this week", ranked));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -96,6 +102,26 @@ public sealed class TitleTracker : ITitleTracker
         }
 
         return rows;
+    }
+
+    /// <summary>Counted posts from the last 7 days and overall, per candidate. Titles with no snapshot were never measured.</summary>
+    private async Task<IReadOnlyDictionary<int, ConversationSignal>> ConversationSignalsAsync(MediaType mediaType, IReadOnlyList<Title> titles, CancellationToken ct)
+    {
+        var ids = titles.Select(t => t.TmdbId).Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<int, ConversationSignal>();
+
+        var since = DateTime.UtcNow.AddDays(-7);
+        var recent = await _db.SocialPosts
+            .Where(p => p.MediaType == mediaType && ids.Contains(p.TmdbId) && !p.Excluded && p.CreatedAt >= since)
+            .GroupBy(p => p.TmdbId)
+            .Select(g => new { TmdbId = g.Key, Posts = g.Count() })
+            .ToDictionaryAsync(x => x.TmdbId, x => x.Posts, ct);
+        var totals = await _db.TitleSnapshots
+            .Where(s => s.MediaType == mediaType && ids.Contains(s.TmdbId))
+            .ToDictionaryAsync(s => s.TmdbId, s => s.TotalPosts, ct);
+
+        return ids.ToDictionary(id => id, id => new ConversationSignal(
+            recent.GetValueOrDefault(id), totals.TryGetValue(id, out var total) ? total : null));
     }
 
     public async Task<TrackedRefreshResult> RefreshAsync(CancellationToken ct = default)

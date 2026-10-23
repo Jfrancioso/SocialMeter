@@ -65,8 +65,11 @@ public sealed class TmdbClient
         var from = DateTime.UtcNow.AddDays(-days).ToString("yyyy-MM-dd");
         var to = DateTime.UtcNow.ToString("yyyy-MM-dd");
         var r = Uri.EscapeDataString(NormalizeRegion(region));
-        // Release types 2 and 3 are limited and wide theatrical; the pipe means "either".
-        return GetListAsync($"discover/movie?with_genres={genreId}&region={r}&with_release_type=2|3&release_date.gte={from}&release_date.lte={to}&sort_by=popularity.desc&include_adult=false", MediaType.Movie, page, ct);
+        // Release types 2 and 3 are limited and wide theatrical; the pipe means "either". The first release must be within
+        // the last year too, or anniversary re-releases (Friday the 13th, 1980) count as "new in theaters"; a year still
+        // allows a festival premiere followed by a theatrical run.
+        var firstReleasedFrom = DateTime.UtcNow.AddDays(-365).ToString("yyyy-MM-dd");
+        return GetListAsync($"discover/movie?with_genres={genreId}&region={r}&with_release_type=2|3&release_date.gte={from}&release_date.lte={to}&primary_release_date.gte={firstReleasedFrom}&sort_by=popularity.desc&include_adult=false", MediaType.Movie, page, ct);
     }
 
     public Task<PagedResult<Title>> SearchAsync(string query, MediaType? mediaType, int page, CancellationToken ct)
