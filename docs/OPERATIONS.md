@@ -175,6 +175,14 @@ SELECT Day, LivePulls, ClaudeInputTokens, ClaudeOutputTokens, XPostsRead, XUsers
 FROM UsageDays ORDER BY Day DESC;
 ```
 
+## The database is private
+
+Azure SQL has public network access turned off; the API reaches it through a private endpoint (DEPLOY.md, "How traffic
+flows"). A login from anywhere else is refused before any password is checked ("Deny Public Network Access is set to
+Yes"). If the API ever logs SQL connection errors right after a networking change, check in this order: the API is still
+joined to `socialmeter-jf-vnet` (App Service → Networking), the private endpoint's connection is Approved, and
+`socialmeter-jf-sql.privatelink.database.windows.net` still has its A record (10.20.2.4) in the private DNS zone.
+
 ## What monitoring costs
 
 About $5–6 a month: the uptime test (2 locations every 15 minutes, about $3.20), two log alert rules ($0.50–1.50 each),

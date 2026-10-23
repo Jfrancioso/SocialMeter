@@ -6,8 +6,10 @@
 .DESCRIPTION
   Resources (one resource group):
     - App Service plan (Linux, B1) + Web App (.NET 8)   the API
-    - Azure SQL server + Basic database (~$4.90/month)  the database (always on, 2 GB)
+    - Azure SQL server + Basic database (~$4.90/month)  the database (always on, 2 GB), public access off
+    - Virtual network + private endpoint + private DNS  how the API reaches the database (~$8/month)
     - Static Web App (Free)                              the Vue front end
+  Monitoring (Application Insights, alerts) and the Cloudflare side are set up separately; see docs/OPERATIONS.md.
 
   Secrets come from the API project's local user secrets (dotnet user-secrets): the API keys become Web App
   application settings, and Sql:AdminPassword is the database admin password (prompted for if absent). Nothing is
@@ -76,8 +78,37 @@ if (-not (Test-Az sql server show --name $sqlSrv --resource-group $rg)) {
   Invoke-Az sql server create --name $sqlSrv --resource-group $rg --location $Location `
     --admin-user $SqlAdmin --admin-password $sqlPasswordPlain --output none | Out-Null
 }
-Invoke-Az sql server firewall-rule create --resource-group $rg --server $sqlSrv --name AllowAzureServices `
-  --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0 --output none | Out-Null
+# No "allow Azure services" firewall rule: it let any Azure customer's resources reach the login prompt. The API reaches
+# the database through a private endpoint instead (below), and public access is switched off once that is in place.
+
+# ---- Private network: the API joins it (outbound), the database gets a private address in it (2026-10-23) ----
+$vnet = "$Prefix-vnet"
+Write-Host "==> Virtual network $vnet (subnets: app for the API, private-endpoints for the database)"
+if (-not (Test-Az network vnet show --name $vnet --resource-group $rg)) {
+  Invoke-Az network vnet create --name $vnet --resource-group $rg --location $Location --address-prefixes 10.20.0.0/16 `
+    --subnet-name app --subnet-prefixes 10.20.1.0/26 --output none | Out-Null
+  Invoke-Az network vnet subnet update --vnet-name $vnet --name app --resource-group $rg `
+    --delegations Microsoft.Web/serverFarms --output none | Out-Null
+  Invoke-Az network vnet subnet create --vnet-name $vnet --name private-endpoints --resource-group $rg `
+    --address-prefixes 10.20.2.0/27 --output none | Out-Null
+}
+$dnsZone = "privatelink.database.windows.net"
+if (-not (Test-Az network private-dns zone show --name $dnsZone --resource-group $rg)) {
+  Invoke-Az network private-dns zone create --name $dnsZone --resource-group $rg --output none | Out-Null
+  Invoke-Az network private-dns link vnet create --zone-name $dnsZone --name "$vnet-link" --resource-group $rg `
+    --virtual-network $vnet --registration-enabled false --output none | Out-Null
+}
+$sqlPe = "$sqlSrv-pe"
+Write-Host "==> Private endpoint $sqlPe for the database"
+if (-not (Test-Az network private-endpoint show --name $sqlPe --resource-group $rg)) {
+  $sqlId = (Invoke-Az sql server show --name $sqlSrv --resource-group $rg --query id --output tsv).Trim()
+  Invoke-Az network private-endpoint create --name $sqlPe --resource-group $rg --location $Location --vnet-name $vnet `
+    --subnet private-endpoints --private-connection-resource-id $sqlId --group-id sqlServer `
+    --connection-name "$sqlPe-conn" --output none | Out-Null
+  # The zone group writes the A record, so the server's usual name resolves to the private address inside the network.
+  Invoke-Az network private-endpoint dns-zone-group create --endpoint-name $sqlPe --name default --resource-group $rg `
+    --private-dns-zone $dnsZone --zone-name sql --output none | Out-Null
+}
 
 Write-Host "==> SQL database $sqlDb (Basic)"
 if (-not (Test-Az sql db show --name $sqlDb --server $sqlSrv --resource-group $rg)) {
@@ -101,6 +132,18 @@ Invoke-Az webapp update --name $webapp --resource-group $rg --https-only true --
 Invoke-Az webapp config connection-string set --name $webapp --resource-group $rg --connection-string-type SQLAzure `
   --settings "DefaultConnection=$connectionString" --output none | Out-Null
 
+# Join the API to the network so it reaches the database's private endpoint. Only private traffic goes through it:
+# "application traffic" (all outbound) is switched back off, because a new network has no route to the internet and
+# TMDB, X, Bluesky and Claude would stop answering.
+Write-Host "==> API joins $vnet (private traffic only), then database public access off"
+$subnetId = (Invoke-Az webapp show --name $webapp --resource-group $rg --query virtualNetworkSubnetId --output tsv).Trim()
+if (-not $subnetId) {
+  Invoke-Az webapp vnet-integration add --name $webapp --resource-group $rg --vnet $vnet --subnet app --output none | Out-Null
+}
+$webappId = (Invoke-Az webapp show --name $webapp --resource-group $rg --query id --output tsv).Trim()
+Invoke-Az resource update --ids $webappId --set properties.outboundVnetRouting.applicationTraffic=false --output none | Out-Null
+Invoke-Az sql server update --name $sqlSrv --resource-group $rg --enable-public-network false --output none | Out-Null
+
 # ---- Front end: Static Web App (Free) ----
 Write-Host "==> Static Web App $swa"
 if (-not (Test-Az staticwebapp show --name $swa --resource-group $rg)) {
@@ -115,7 +158,7 @@ $settings = @(
   "Cors__AllowedOrigins__0=https://$uiHost",
   # Conservative spend defaults for a fresh deployment; raise them in the portal once traffic and cost are known.
   "X__MaxResults=20",
-  "SocialMeter__MaxLivePullsPerHour=6",
+  "Guardrails__MaxLivePullsPerHour=6",
   "SocialMeter__TrackedListPages=1"
 )
 foreach ($key in $secrets.Keys) {

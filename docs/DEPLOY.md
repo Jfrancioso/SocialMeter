@@ -10,8 +10,42 @@ a push to `main` that passes deploys. That is the whole pipeline for a solo proj
 | API | App Service (Linux, .NET 8) | B1 | The free tier cannot keep Always On, and the background workers (tracked set, deletion sync) need the process alive. |
 | Database | Azure SQL | Basic (5 DTU, 2 GB), ~$4.90/month | Same engine as local SQL Server Express, so the migrations apply unchanged. Always on. Moved off the free serverless offer on 2026-10-23: the site kept it awake, it used 22,327 of its 100,000 monthly vCore-seconds in its first day and would have paused until the 1st. 26 MB at the move. |
 | Front end | Static Web Apps | Free | Vite's `dist/` is static; the free tier includes HTTPS and a hostname. |
+| Private network | Virtual network `socialmeter-jf-vnet` (10.20.0.0/16), private endpoint `socialmeter-jf-sql-pe`, private DNS zone `privatelink.database.windows.net` | ~$8/month (the endpoint ~$7.30, the zone $0.50) | The database has no public door: only the API, inside the network, can reach it. Since 2026-10-23. |
+| Monitoring | Application Insights, Log Analytics, alerts | ~$5-6/month | See OPERATIONS.md. |
 
-Rough running cost is the B1 plan (~$13/month) plus the Basic database (~$4.90/month); the front end is free. Claude and X are billed separately by their providers. The subscription has a $30/month budget alert.
+Rough running cost: the B1 plan (~$13/month), the Basic database (~$4.90), the private network (~$8) and monitoring (~$5-6),
+so about $31-32 a month; the front end is free. Claude and X are billed separately by their providers. The subscription
+has a $30/month budget alert, which this total now crosses: raise it to about $45 (Cost Management → Budgets).
+
+## How traffic flows
+
+```
+Visitor ── Cloudflare (WAF, rate limits, Access for /api/admin) ──┬── Static Web Apps   chatterbub.com, www
+                                                                   └── App Service       api.chatterbub.com
+                                                                         │  accepts only Cloudflare's addresses
+                                                                         │  joined to socialmeter-jf-vnet, subnet "app"
+                                                                         └── private endpoint 10.20.2.4 ── Azure SQL
+                                                                               (public network access: Disabled)
+```
+
+The front end never talks to the API from a server: the visitor's browser calls `api.chatterbub.com`, so there is no
+front-end-to-API link to make private. VNet integration is outbound only (it lets the API reach private addresses); only
+private traffic uses it (`outboundVnetRouting.applicationTraffic = false`), because the network has no route to the
+internet and TMDB, X, Bluesky and Claude must still answer. Leave it that way unless a NAT gateway (~$32/month) is added.
+
+**Reaching the database from home (SSMS) now that public access is off:** open it, connect, close it again.
+
+```bash
+az sql server update -g socialmeter-jf-rg -n socialmeter-jf-sql --enable-public-network true
+```
+
+The firewall rule `joey-home` (74.131.231.234) applies while it is open; update it if the home address changed. When done:
+
+```bash
+az sql server update -g socialmeter-jf-rg -n socialmeter-jf-sql --enable-public-network false
+```
+
+Both changes send a `chatterbub-app-changed` email, which is expected. The app is unaffected either way.
 
 ## One-time setup
 
