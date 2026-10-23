@@ -5,7 +5,8 @@ it. Every section ends with "Say it back": questions to answer out loud, in your
 cannot, reread; if you can, you own that part. The whole thing is roughly two thousand lines of code that matter;
 everything else is plumbing you can skim.
 
-Companion documents: `ARCHITECTURE.md` (the map), `code-review-2026-10-21.md` (what is still weak and why).
+Companion documents: `ARCHITECTURE.md` (the map and the patterns to copy), `OPERATIONS.md` (alerts, guardrails, what to
+do when an email arrives), `DEPLOY.md` (how it runs in Azure), `code-review-2026-10-21.md` (a dated review, kept for history).
 
 ---
 
@@ -13,7 +14,7 @@ Companion documents: `ARCHITECTURE.md` (the map), `code-review-2026-10-21.md` (w
 
 A visitor opens a title page. The API answers with a reading: a 0–100 number, a label, a margin of error, and the posts
 behind it. To produce that number the API has, at some earlier moment, pulled public posts about the title from X,
-Reddit and Steam, asked a model whether each post is really a reaction to this title and how the author feels, applied
+Bluesky and Steam, asked a model whether each post is really a reaction to this title and how the author feels, applied
 trust rules that discount throwaway accounts and duplicates, and rolled the survivors into a weighted mean that is
 pulled toward neutral until there is enough evidence. One reading per day is stored so the page can show a trend.
 
@@ -38,8 +39,8 @@ API  Controllers/SocialMeterController.Get
        ├─ ITitleService.GetDetailsAsync            who is this title?
        ├─ ITitleTracker.GetReasonAsync             is it tracked? (if not: never pull)
        ├─ PullGate.AcquireAsync                    one pull per title at a time
-       ├─ decide: stale? forced? budget left?      (DecideAndPullAsync)
-       │    └─ PostIngestionService.IngestAsync    per ISocialSource: fetch → upsert → assess → trust
+       ├─ decide: stale? forced? allowed?          (DecideAndPullAsync, PullPolicy, LivePullBudget)
+       │    └─ PostIngestionService.IngestAllAsync all sources at once: fetch → upsert → assess → trust
        ├─ TrustPolicy.ApplyCrossPostRules          one voice per account, duplicates
        ├─ SocialScoreCalculator.Compute            the maths
        └─ persist TitleSnapshot + ScoreHistory     cache and daily row
@@ -51,7 +52,7 @@ was read recently, free and instant. The rules for when to pull again (`RefreshA
 the budget) are the whole cost model.
 
 **Say it back:** What are the three conditions that must all hold before a pull happens? What does the page show when
-the hourly budget is exhausted, and why is that better than an error?
+a guardrail turns a pull away, and why is that better than an error?
 
 ---
 
@@ -83,7 +84,7 @@ One options class per concern, bound from `appsettings.json` and overridden by u
 environment variables in production. Secrets never go in appsettings: the repo is public.
 
 `SocialMeterOptions` is the one to know. Its comments explain each number. Three groups:
-- refresh and cost: `RefreshAfterHours`, `MinForcedRefreshMinutes`, `MaxLivePullsPerHour`, `MaxForcedRefreshesPerHourPerCaller`;
+- refresh: `RefreshAfterHours`, `MinForcedRefreshMinutes` (the money limits live in `GuardrailOptions`, section 5a);
 - aggregation: `PriorStrength`, `MinSigma`, the trend settings (published on the method page, not secret);
 - trust: account age, reputation, playtime, content length, link spam (deliberately not published; see section 7).
 
@@ -96,7 +97,8 @@ key), injectable, and testable with `Options.Create(new ...)`.
 
 ## 4. The web layer (`Web/`, `Controllers/`, `Contracts/`)
 
-Read: `Program.cs`, `Web/DependencyInjection.cs`, `Web/Filters/RequireAdminKeyAttribute.cs`, the three controllers.
+Read: `Program.cs`, `Web/DependencyInjection.cs`, `Web/Filters/RequireAdminKeyAttribute.cs`, `Web/Filters/RequireAdminAttribute.cs`,
+`Web/Telemetry.cs`, then the controllers.
 
 `Program.cs` is a composition root: it calls `AddInfrastructure`, `AddApplication`, `AddWeb`, migrates the database and
 runs. **Why per-layer registration?** You can read each layer's dependencies in one place, and the layers cannot quietly
@@ -110,8 +112,12 @@ Security pieces, each a few lines:
 - `RequireAdminKeyAttribute`: an authorization filter on `OperatorController`. Constant-time compare against
   `Admin:ApiKey`; 503 when unset (fail closed), 401 when wrong. **Why a shared key instead of real auth?** There are no
   users yet; a key is the smallest thing that closes a hole that could cost real money.
+- `RequireAdminAttribute`: the /admin page's endpoints. Either the admin key, or a Cloudflare Access token for an
+  allowed email (Cloudflare signs Joey in with a one-time code; the API checks Cloudflare's signature again).
 - Rate limiting: a sliding window per client address on every request, registered in `AddWeb`. The per-caller forced
-  refresh allowance and the global pull ceiling live in `LivePullBudget` because they are about money, not traffic.
+  refresh allowance and the pull ceilings live in `LivePullBudget` because they are about money, not traffic.
+- `Telemetry`: requests, outside calls, logs and exceptions go to Application Insights when its connection string is
+  set. Server-side only; query-string values are redacted, so API keys in TMDB/OMDb URLs never reach it.
 - CORS origins from configuration; HSTS outside Development; ProblemDetails so errors are uniform and do not leak.
 
 **Say it back:** Why does the admin filter return 503 rather than 401 when no key is configured? Where would you add a
@@ -121,7 +127,7 @@ new public endpoint, and what must it never do?
 
 ## 5. Application use cases (`Application/Social`)
 
-Read in this order: `SocialMeterService.cs`, `PostIngestionService.cs`, `PullGate.cs`, `LivePullBudget.cs`,
+Read in this order: `SocialMeterService.cs`, `PostIngestionService.cs`, `PullGate.cs`, `../Guardrails/LivePullBudget.cs`,
 `ScoreExplainer.cs`, `PostQueryService.cs`, `RescoreService.cs`, `ScoreHistoryService.cs`, `DeletionSyncService.cs`.
 
 The rule: one class, one verb. `SocialMeterService` gets a reading. `PostIngestionService` gets posts in. The explainer
@@ -148,6 +154,44 @@ Things worth understanding deeply:
 
 **Say it back:** Walk through what happens when two browsers open a stale, tracked title within the same second.
 Why does rescore skip posts whose `Analyzer` already matches?
+
+---
+
+## 5a. Guardrails: what bounds the bill (`Application/Guardrails`)
+
+Read in this order: `LivePullBudget.cs`, `UsageMeter.cs`, `UsageMeterWorker.cs`, `SourceBreakers.cs`, `GuardrailLog.cs`,
+then `docs/OPERATIONS.md`.
+
+Every live pull costs money (X bills each post and author it returns; Claude bills tokens), so the code answers
+"how much can this cost on a bad day?" with a hard number rather than a hope:
+
+- **One door.** `LivePullBudget.TryAcquirePull` is the only way a pull starts. It checks, cheapest first: the kill
+  switch, today's estimated spend against `DailySpendLimitUsd`, today's pull count against `MaxLivePullsPerDay`, then
+  the hourly token bucket. It returns *which* guardrail said no (`PullRefusal`), so the reader is told the truth
+  ("paused until 8:00 PM") and the refresh log records the reason.
+- **Counting what was spent.** `UsageMeter` adds up today's Claude tokens (reported by `ClaudePostAssessor` from each
+  response's `Usage`) and X posts and profiles (reported by `XSource`, including the deletion sync's lookups), and
+  prices them with the rates in `GuardrailOptions`. **Why in memory and not one database write per call?** Claude
+  batches run in parallel, and a `DbContext` must never be used from parallel tasks: that is exactly what caused the
+  2026-10-23 home-page outage. **Why save it every minute then?** So a deploy (which restarts the app) doesn't reset
+  today's spend to zero and hand out a fresh budget.
+- **Circuit breakers.** `SourceBreakers` keeps a small state per outside service: closed (calls go through), open
+  (skipped until a time), then one trial call. Three failures in a row open it for 15 minutes; an answer that won't
+  improve by retrying (402 out of credit, 429 slow down, key rejected) opens it at once for an hour. Sources throw
+  `HttpRequestException` with the status code so the breaker can tell those apart. **Why bother?** Without it, a source
+  out of credit is called (and a model is paid to read nothing) on every pull, all night, and nobody knows.
+- **Telling a human.** `GuardrailLog` writes every trip as one fixed sentence, "Guardrail tripped: {Guardrail}. {Detail}",
+  at most once an hour each. An Azure alert rule searches Application Insights for that sentence and emails it. The
+  shape is a contract: change the wording and the alert goes blind.
+
+Two related fixes from the same day show why this matters: when Claude failed, its word-list fallback used to stamp
+posts as read by "claude", so they were never re-read (now `PostAssessment.ReadBy` says who really read it); and Steam
+sometimes answers with an HTML page, which used to surface as a baffling JSON error (now "Steam answered with a web
+page", counted by the breaker).
+
+**Say it back:** A thousand people open the site at once. Walk through which guardrails they meet, in order, and what
+each one costs to check. X runs out of credit at 9 PM: what happens on the next pull, the one after, and in your inbox?
+Why can't `UsageMeter` just write to the database on every Claude call?
 
 ---
 
@@ -250,7 +294,9 @@ Each social platform is one class implementing `ISocialSource` (`Platform`, `IsC
 - **X**: recent search (seven days), the title in quotes plus media words, exclusions measured against real data
   (`XOptions.ExcludeTerms`), author expansions for account age and followers, media expansions for images. Every
   returned post costs money, which is why the query is tightened and `MaxResults` is capped in development.
-- **Reddit (official)**: OAuth client-credentials, search over a year sorted by relevance, author lookup for age and
+- **Bluesky**: app-password session, keyword search over the last week, local rules pick the posts that are about the
+  title before any are sent to the model. Free to read.
+- **Reddit (official, not used in production)**: OAuth client-credentials, search over a year sorted by relevance, author lookup for age and
   karma, `/api/info` for deletion checks. Needs approval; the free tier is non-commercial.
 - **Arctic Shift (dev only)**: a volunteer archive, registered only in Development. Reads a title's own subreddit by
   name (fast), then text-searches the big subreddits (slow, often times out), then expands discussion threads.
@@ -300,6 +346,9 @@ everything around it.
 - `components/Title/` holds the sections: `MeterCard` (gauge and refresh), `WhyThisScore` (the disclosure around the
   maths), `SocialPulse` (feed and side panels). Each owns a CSS module; styles do not leak.
 - `components/Meter/` are the visual primitives: `MeterGauge` (arc, marker, margin band), `TrendLine`, `ShareBar`.
+- `components/Admin/` and `composables/useAdmin.js` are the /admin command center: the admin bar, the Remove switch,
+  `HealthPanel` (spend and service health from `GET /api/admin/guardrails`). `utils/outbound.js` with `OutboundLink.vue`
+  is the one door for links that leave the site.
 - `composables/useSnapshots.js` is a shared cache so every poster card on a page reads the same cached reading with one
   batched request. `useDevicePref.js` is localStorage with a try/catch, for the spoiler shield and collapsed sections.
 - The spoiler shield blurs post text until tapped, on by default, because a social feed for a film is a spoiler feed.
@@ -313,7 +362,9 @@ everything around it.
 - No secrets in the repo; keys in user secrets or environment; HTTP client logging at Warning so query-string keys never
   reach logs; TMDB can use a header token.
 - Operator endpoints behind a key, fail closed, serialised.
-- Rate limit per client; forced refreshes per client; live pulls per hour.
+- Rate limit per client; forced refreshes per client; live pulls per hour and per day; a daily spend limit; a kill
+  switch; a circuit breaker per outside service; email alerts (OPERATIONS.md).
+- The admin area sits behind Cloudflare Access, and the API checks Access's signed token again.
 - Entities never leave the API; trust weights and thresholds never leave the server.
 - Dev-only archive gated at registration, not by a flag the code checks.
 - Still open (medium/low): prompt envelope around posts, caching of title details, media URL allowlist, security headers
@@ -323,10 +374,14 @@ everything around it.
 
 ## 15. What is not done, and why it is next
 
-In order: a spend ledger (a table of every pull so the cost is a number, not a guess); deploy with a small tracked set;
-Reddit approval, which fixes the older-title problem; then accounts, with exactly one feature that needs them. Not
-before: more sources, more panels, agents. Reasons are in the conversation history, but the short form is: ship a
-public, tested, deployed version of what exists before improving it.
+Done since this section was first written: the spend ledger (`UsageDays`), deployment, guardrails and alerts.
+
+Next, in order: title page highlights (a real quote, and the words positive and negative posts mention most); per-title
+link previews and SEO; a Bluesky bot posting score moments; "Coming soon" with a separate pre-release buzz reading;
+then accounts (watchlist and score alerts), with exactly one feature that needs them. Also open: searches for titles
+whose names are common words (FROM finds posts that only contain the word "from"), and re-checking older X posts less
+often, since every daily deletion check is billed. The short form stays the same: ship what exists, tested and
+deployed, before adding more.
 
 ---
 

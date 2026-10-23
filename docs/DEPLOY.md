@@ -57,7 +57,29 @@ Everything is an App Service application setting, named with `__` for `:` (`Tmdb
 turns on HSTS. Change a setting in the portal or with `az webapp config appsettings set`; the app restarts.
 
 Keep the tracked set small at first: `SocialMeter__TrackedListPages=1` halves the number of titles that can trigger
-pulls, and `SocialMeter__MaxLivePullsPerHour` is the ceiling on spend.
+pulls. Spend is bounded by the `Guardrails__*` settings (hourly and daily pull caps, daily spend limit, kill switch);
+OPERATIONS.md explains each one and what the alert emails mean.
+
+Settings in production as of 2026-10-23 (names only; values live in App Service, secrets never in the repo):
+
+| Setting | Why |
+|---|---|
+| `Tmdb__*`, `Omdb__ApiKey`, `Steam__ApiKey`, `X__BearerToken`, `Bluesky__Identifier`, `Bluesky__AppPassword`, `Anthropic__ApiKey` | Provider credentials |
+| `X__MaxResults=20` | Posts per X search; X bills each one |
+| `SocialMeter__TrackedListPages=1` | A smaller tracked set |
+| `Guardrails__MaxLivePullsPerHour=12` | Hourly pull cap (daily cap and spend limit use the defaults in appsettings.json) |
+| `Admin__ApiKey`, `Admin__Emails__0`, `CloudflareAccess__TeamDomain`, `CloudflareAccess__Audience` | Admin and operator access |
+| `Cors__AllowedOrigins__0..2` | The site's origins |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Telemetry to `socialmeter-jf-ai` (switches it on) |
+| `Watch__Windows__0__*` | A watch window, while one is planned (delete afterwards) |
+| `Home__Rows__0..n` | Only when overriding the default home rows (e.g. during an incident) |
+| `WEBSITE_RUN_FROM_PACKAGE=1` | Atomic deploys |
+
+App Service's health check is on (`/api/health`), and monitoring lives beside the app in `socialmeter-jf-rg`: Log Analytics
+workspace `socialmeter-jf-logs` (0.2 GB daily cap, 30 days), Application Insights `socialmeter-jf-ai`, action group
+`chatterbub-alerts` (email), uptime test `chatterbub-api-health`, alert rules `chatterbub-api-down`,
+`chatterbub-api-unhealthy`, `chatterbub-server-errors`, `chatterbub-guardrails`. All created with the Azure CLI on
+2026-10-23; OPERATIONS.md has the details and the queries.
 
 ## Operator actions in production
 

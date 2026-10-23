@@ -1,5 +1,8 @@
 # SocialMeter code review — 2026-10-21
 
+> **History.** This is a snapshot of the code on 2026-10-21. Most items below have since been fixed or superseded (security
+> headers, caching, admin auth, guardrails); the current picture is in ARCHITECTURE.md, DEPLOY.md and OPERATIONS.md.
+
 Scope: API (`SocialMeter/`) and UI (`socialmeter-ui/src`). Security findings come from an independent read-only pass;
 architecture notes from a second read. Line numbers are as of commit a58438f (API) / e1aa434 (UI).
 

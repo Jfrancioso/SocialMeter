@@ -34,7 +34,9 @@ Nothing in Application references a concrete client. The one pragmatic exception
 `Program.cs` does three things: `AddInfrastructure`, `AddApplication`, `AddWeb`, then `UseWeb`. Each layer registers its
 own services in its `DependencyInjection.cs`. To add something, register it in the layer it belongs to.
 
-## Use cases (Application/Social)
+## Use cases
+
+Grouped by folder under `Application/`. `Social/` is the core:
 
 | Class | Responsibility |
 |---|---|
@@ -46,13 +48,55 @@ own services in its `DependencyInjection.cs`. To add something, register it in t
 | `DeletionSyncService` | Operator and worker: purge what the platforms removed, prune by retention, recompute. One run at a time. |
 | `ScoreHistoryService` | One row per title per day; backfill from post dates; Mann-Kendall trend. |
 | `TrustPolicy`, `VerdictAssessor`, `SocialScoreCalculator`, `ScoreStatistics`, `SubstanceHeuristic` | Pure policies and maths. No I/O, fully unit-tested. |
-| `PullGate`, `LivePullBudget` | Process-wide guards: one pull per title at a time; hourly ceilings on live pulls and forced refreshes. |
+| `PullGate` | One live pull per title at a time. |
+
+The rest:
+
+| Folder | Classes | Responsibility |
+|---|---|---|
+| `Guardrails/` | `LivePullBudget`, `UsageMeter` (+ `UsageMeterWorker`), `SourceBreakers`, `GuardrailLog`, `GuardrailStatusService` | Bound the bill and report on it: the one door for paid pulls (kill switch, daily spend limit, daily and hourly caps), today's usage, a circuit breaker per outside service, the log line the alerts search for, the admin page's view. See OPERATIONS.md. |
+| `Home/` | `HomeFeedService`, `HomeLayout`, `HomeSignals`, `FeaturedPick`, `SearchSuggestions` | The home page and the search suggestions; pure rules for rows, the hero, crowd-vs-critics and movers. |
+| `Tracking/` | `TitleTracker`, `WatchWindows` (+ `WatchWindowWorker`), `SeasonalTheme` | Which titles may be pulled; scheduled reads during an event. |
+| `Ratings/` | `CriticsBaseline`, `CriticsScores` (+ `CriticsRefreshWorker`) | The critics number (Rotten Tomatoes + Metacritic only) stored on snapshots. |
+| `Moderation/` | `ModerationService`, `PostModeration` | Hide and restore posts, logged in `ModerationActions`. |
+| `Events/` | `OutboundClicks` | Anonymous daily counts of clicks that leave the site. |
+| `Common/` | `Text`, `OperationInProgressException` | Small shared helpers. |
 
 Rule of thumb: a service that grows past ~200 lines or starts to need a second verb in its name is two services.
 
+## Patterns to copy
+
+These came out of real bugs and reviews; new code should follow them.
+
+1. **Paid work goes through one door.** Anything that spends money per call is started by `LivePullBudget` and counted
+   by `UsageMeter`; its client throws `HttpRequestException` with the status code, and its caller reports success or
+   failure to `SourceBreakers`. A new paid source that skips these is a bill nobody can see.
+2. **Never share a `DbContext` across parallel work.** A request's context runs one query at a time. Parallelise
+   outside calls (TMDB, Steam, Claude batches), never database reads: `HomeFeedService` keeps the two in separate,
+   labelled places, and `UsageMeter` counts in memory for the same reason. The 2026-10-23 home-page 500s were this.
+   Before shipping an endpoint change, fire about 20 uncached requests at once locally (vary `region` on /api/home).
+3. **Rules are small pure classes with tests.** `PullPolicy`, `PostModeration`, `FeaturedPick`, `HomeLayout`,
+   `HomeSignals`, `CriticsBaseline`, `TrustPolicy`: no I/O, a few public static methods, an xUnit file each. Services
+   gather data and call them.
+4. **Side writes are best effort.** Recording something next to the main work (refresh log, critics score, click
+   counts, usage) catches its own errors and logs a warning; it must never turn the reader's request into an error.
+5. **Say the true state.** Never invent a timestamp or a "nothing found": a title never read says so, a paused read
+   says until when (from `NextRefreshAllowedAt`), a source that failed says "Temporarily unavailable" publicly and the
+   real error goes to the log.
+6. **Configuration over code for things that change.** Home rows (`Home:Rows`), guardrail limits (`Guardrails:*`),
+   watch windows (`Watch:Windows`) are App Service settings. Defaults for lists live in code, not `appsettings.json`,
+   because the configuration binder appends to arrays instead of replacing them (`HomeOptions.DefaultRows`).
+7. **Background workers** get their own `*Worker.cs` file, read their interval from options, wait a little after
+   start-up, create a scope per run, and `LogError` a failed run (which reaches the error alert).
+8. **Log lines that alerts depend on have one shape** and one writer (`GuardrailLog`). Change the wording and update
+   the alert rule's query in the same change.
+9. **One door for outbound links in the UI** (`OutboundLink.vue` + `utils/outbound.js`), so partner codes and click
+   counts can be added in one place later. Shared lists (platform names, moderation reasons) live once in `utils/`.
+
 ## Adding things
 
-- **A social platform**: implement `ISocialSource` in `Infrastructure/<Platform>/`, register it in `Infrastructure/DependencyInjection.cs`. Trust, assessment, scoring, history and the UI need no change.
+- **A social platform**: implement `ISocialSource` in `Infrastructure/<Platform>/`, register it in `Infrastructure/DependencyInjection.cs`. Throw `HttpRequestException` with the status on a failed call, and if it is paid, report reads to `UsageMeter` (pattern 1). Trust, assessment, scoring, history, breakers and the UI need no change.
+- **A home row**: one line in `HomeFeedService` in the right place (outside services, or our database), a key in `HomeRowKeys`, and add the key to `Home:Rows` to show it.
 - **An assessor**: implement `IPostAssessor`; see `ClaudePostAssessor` and the lexicon fallback.
 - **A media type**: extend `MediaType` and `MediaTypeExtensions`, add a title provider in Infrastructure, add the UI route segment. The tracker, scoring and pages are type-agnostic.
 - **An endpoint**: a thin action in the right controller calling an existing or new use-case service. Operator actions go in `OperatorController`, which carries the admin-key filter.
@@ -61,24 +105,29 @@ Rule of thumb: a service that grows past ~200 lines or starts to need a second v
 ## Security posture
 
 Operator endpoints (`/api/operator/*`) require `X-Admin-Key` (constant-time compare against `Admin:ApiKey`) and are
-disabled when the key is unset. Every client has a sliding-window request limit; forced refreshes have a per-client
-allowance and live pulls a process-wide hourly ceiling. Secrets live only in user secrets or environment; HttpClient
-request logging is at Warning so query-string credentials never reach logs. The dev-only archive source is gated on
-`IsDevelopment()` at registration. See `docs/code-review-2026-10-21.md` for the full review and the remaining medium
-and low items.
+disabled when the key is unset; Cloudflare also blocks them except from the owner's addresses. The admin endpoints
+(`/api/admin/*`) sit behind Cloudflare Access and accept either the key or Access's signed token for an allowed email,
+checked again in `RequireAdminAttribute`. Every client has a sliding-window request limit (and Cloudflare a stricter
+edge limit); forced refreshes have a per-client allowance; live pulls have hourly and daily caps, a daily spend limit
+and a kill switch. Secrets live only in user secrets or App Service settings; HttpClient request logging is at Warning
+and telemetry redacts query strings, so credentials in URLs never reach logs. The dev-only archive source is gated on
+`IsDevelopment()` at registration. Weekly ZAP scans, CodeQL and dependency gates are listed in DEPLOY.md.
+`docs/code-review-2026-10-21.md` is a dated review kept for history.
 
 ## Scaling notes
 
-The API is stateless except for the memory cache, the pull gate and the two hosted workers. One instance serves
+The API is stateless except for the memory cache, the pull gate, the guardrails' in-memory counters and the hosted
+workers (tracked set, deletion sync, critics refresh, usage saver, watch windows). One instance serves
 thousands of readers; the cost driver is live pulls, which the tracked set and the budget bound. For two or more
-instances: move cache and gate to Redis, run workers in a single worker instance, run migrations from CI instead of at
+instances: move cache, gate, usage counts and breakers to Redis or the database, run workers in a single worker instance, run migrations from CI instead of at
 startup, add response caching on GETs.
 
 ## Front end (socialmeter-ui)
 
 Vue 3 with the conventional split: `pages/` are routes and layout, `components/` are presentational and grouped by area
-(`Meter/`, `Social/`, `Title/`, `Ratings/`), `composables/` hold state and data loading (`useTitlePage`, `useSnapshots`,
-`useDevicePref`), `api.js` is the only place that knows URLs, `utils/` are pure helpers. Each component owns its CSS
+(`Meter/`, `Social/`, `Title/`, `Ratings/`, `Admin/`), `composables/` hold state and data loading (`useTitlePage`,
+`useSnapshots`, `useDevicePref`, `useAdmin`), `api.js` is the only place that knows URLs, `utils/` are pure helpers
+(`format`, `platforms`, `outbound`, `moderation`, `shareCard`). Each component owns its CSS
 module. A page should be layout plus a composable call; when a page's script grows past a screen, the logic moves to a
 composable and the markup splits into section components under `components/<Page>/`.
 
