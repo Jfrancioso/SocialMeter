@@ -1,5 +1,6 @@
 # Continuous integration: every push and pull request builds the API and runs the free unit tests.
 # The paid Claude eval (Category=Eval) is excluded on purpose; run it by hand when the prompt changes.
+# A package with a known High or Critical vulnerability, direct or pulled in by another package, fails the run.
 name: CI
 
 on:
@@ -20,6 +21,18 @@ jobs:
 
       - name: Restore
         run: dotnet restore SocialMeter.sln
+
+      - name: Vulnerable packages
+        run: |
+          dotnet list SocialMeter.sln package --vulnerable --include-transitive --format json > vulnerable.json
+          jq -r '.projects[].frameworks[]? | ((.topLevelPackages // []) + (.transitivePackages // []))[]
+                 | . as $p | .vulnerabilities[] | "\(.severity)\t\($p.id) \($p.resolvedVersion)\t\(.advisoryurl)"' vulnerable.json \
+            | sort -u > vulnerable.txt
+          if [ -s vulnerable.txt ]; then cat vulnerable.txt; else echo "No known vulnerable packages."; fi
+          if grep -qE '^(High|Critical)' vulnerable.txt; then
+            echo "::error::NuGet packages with High or Critical vulnerabilities (listed above). Update them to a patched version."
+            exit 1
+          fi
 
       - name: Build
         run: dotnet build SocialMeter.sln --configuration Release --no-restore

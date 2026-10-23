@@ -35,6 +35,21 @@ stops the deploy.
 
 Manual deploy of the current `main`: Actions → Deploy → Run workflow.
 
+## Security checks
+
+| Check | Where | What fails it |
+|---|---|---|
+| Vulnerable packages (NuGet) | API CI, every push and pull request | Any High or Critical advisory, direct or transitive (`dotnet list package --vulnerable --include-transitive`) |
+| Vulnerable packages (npm) | UI CI, every push and pull request | High or Critical in packages that ship to visitors; Critical in build tools (`npm audit`) |
+| Passive scan of the live site (DAST) | `Security scan` workflow here, Mondays 07:00 UTC or Run workflow | Any ZAP baseline alert not reviewed in `.zap/rules.tsv` |
+| Code scanning (SAST) | GitHub CodeQL default setup, both repos | Alerts appear under Security → Code scanning |
+| Dependency alerts | GitHub Dependabot alerts and security updates, both repos | Alerts under Security → Dependabot; fix PRs open on their own |
+| Secrets | GitHub secret scanning with push protection, both repos | A push containing a known token format is blocked |
+
+Dependabot version bumps wait 14 days after a release (`cooldown` in `dependabot.yml`); security fixes do not wait. The
+ZAP scan is passive only. Never run an active scan against production: it sends attack payloads, spends the refresh
+budget and writes to the database. Run one against a local copy if needed.
+
 ## Configuration in production
 
 Everything is an App Service application setting, named with `__` for `:` (`Tmdb__ReadAccessToken`, `Admin__ApiKey`,

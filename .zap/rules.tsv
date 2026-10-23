@@ -1,0 +1,2 @@
+# ZAP baseline rules: <rule id>\t<IGNORE|WARN|FAIL>\t<why>. Unlisted rules use ZAP's default (WARN), which fails the
+# weekly scan, so every alert is either fixed or reviewed and listed here with the reason.

@@ -1,0 +1,39 @@
+# Weekly passive scan of the live site with the OWASP ZAP baseline. It crawls each address and inspects what comes back
+# (security headers, cookies, content security policy, error pages, information leaks) without sending any attacks, so it
+# is safe to point at production. ZAP does not run the site's JavaScript, so it never calls the API's title endpoints and
+# never starts a refresh: it costs nothing in Claude calls. Alerts we have reviewed and accepted are listed in
+# .zap/rules.tsv; anything new fails the run. Reports are attached to each run, not filed as issues, because this repo is
+# public. A full active scan sends attack payloads and must only ever run against a local copy, never production.
+name: Security scan
+
+on:
+  schedule:
+    - cron: "0 7 * * 1" # Mondays 07:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zap-baseline:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: site
+            target: https://chatterbub.com
+          - name: api
+            target: https://api.chatterbub.com/api/health
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ZAP baseline (${{ matrix.name }})
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: ${{ matrix.target }}
+          rules_file_name: .zap/rules.tsv
+          cmd_options: "-m 2"
+          allow_issue_writing: false
+          fail_action: true
+          artifact_name: zap-${{ matrix.name }}

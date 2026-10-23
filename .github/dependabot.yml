@@ -1,4 +1,5 @@
 # Weekly pull requests for NuGet packages and GitHub Actions versions. CI runs on each one, so a bad bump never merges unseen.
+# A release must be 14 days old before Dependabot proposes it (our two-week rule); security updates ignore the wait.
 version: 2
 updates:
   - package-ecosystem: nuget
@@ -8,7 +9,11 @@ updates:
     groups:
       nuget:
         patterns: ["*"]
+    cooldown:
+      default-days: 14
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14

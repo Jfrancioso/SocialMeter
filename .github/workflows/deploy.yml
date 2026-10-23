@@ -10,6 +10,10 @@ on:
     paths-ignore:
       - "docs/**"
       - "**/*.md"
+      - ".github/dependabot.yml"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/security-scan.yml"
+      - ".zap/**"
   workflow_dispatch:
 
 concurrency:
