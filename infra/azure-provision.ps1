@@ -6,7 +6,7 @@
 .DESCRIPTION
   Resources (one resource group):
     - App Service plan (Linux, B1) + Web App (.NET 8)   the API
-    - Azure SQL server + database on the free offer      the database (auto-pauses when idle)
+    - Azure SQL server + Basic database (~$4.90/month)  the database (always on, 2 GB)
     - Static Web App (Free)                              the Vue front end
 
   Secrets come from the API project's local user secrets (dotnet user-secrets): the API keys become Web App
@@ -69,7 +69,8 @@ if ($secrets.ContainsKey("Sql:AdminPassword")) {
 Write-Host "==> Resource group $rg in $Location"
 Invoke-Az group create --name $rg --location $Location --output none | Out-Null
 
-# ---- Database: Azure SQL free offer (auto-pauses; the first request after a pause is slow, which is fine here) ----
+# ---- Database: Azure SQL Basic (always on, flat price). The free serverless offer was tried first: a public site keeps
+# it awake, so its 100,000 monthly vCore-seconds ran out in days and it would pause until the 1st. ----
 Write-Host "==> SQL server $sqlSrv"
 if (-not (Test-Az sql server show --name $sqlSrv --resource-group $rg)) {
   Invoke-Az sql server create --name $sqlSrv --resource-group $rg --location $Location `
@@ -78,11 +79,10 @@ if (-not (Test-Az sql server show --name $sqlSrv --resource-group $rg)) {
 Invoke-Az sql server firewall-rule create --resource-group $rg --server $sqlSrv --name AllowAzureServices `
   --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0 --output none | Out-Null
 
-Write-Host "==> SQL database $sqlDb (free offer)"
+Write-Host "==> SQL database $sqlDb (Basic)"
 if (-not (Test-Az sql db show --name $sqlDb --server $sqlSrv --resource-group $rg)) {
   Invoke-Az sql db create --name $sqlDb --server $sqlSrv --resource-group $rg `
-    --edition GeneralPurpose --compute-model Serverless --family Gen5 --capacity 2 `
-    --use-free-limit --free-limit-exhaustion-behavior AutoPause --output none | Out-Null
+    --edition Basic --service-objective Basic --max-size 2GB --output none | Out-Null
 }
 $connectionString = "Server=tcp:$sqlSrv.database.windows.net,1433;Initial Catalog=$sqlDb;User ID=$SqlAdmin;Password=$sqlPasswordPlain;Encrypt=True;TrustServerCertificate=False;Connection Timeout=60;"
 

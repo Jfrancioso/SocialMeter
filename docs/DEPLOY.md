@@ -8,10 +8,10 @@ a push to `main` that passes deploys. That is the whole pipeline for a solo proj
 | Piece | Azure resource | Tier | Why |
 |---|---|---|---|
 | API | App Service (Linux, .NET 8) | B1 | The free tier cannot keep Always On, and the background workers (tracked set, deletion sync) need the process alive. |
-| Database | Azure SQL, free offer | Serverless, auto-pause | Same engine as local SQL Server Express, so the migrations apply unchanged. First request after a pause is slow. |
+| Database | Azure SQL | Basic (5 DTU, 2 GB), ~$4.90/month | Same engine as local SQL Server Express, so the migrations apply unchanged. Always on. Moved off the free serverless offer on 2026-10-23: the site kept it awake, it used 22,327 of its 100,000 monthly vCore-seconds in its first day and would have paused until the 1st. 26 MB at the move. |
 | Front end | Static Web Apps | Free | Vite's `dist/` is static; the free tier includes HTTPS and a hostname. |
 
-Rough running cost is the B1 plan; the other two are free. Set a budget alert on the resource group anyway.
+Rough running cost is the B1 plan (~$13/month) plus the Basic database (~$4.90/month); the front end is free. Claude and X are billed separately by their providers. The subscription has a $30/month budget alert.
 
 ## One-time setup
 
@@ -151,7 +151,7 @@ Every Refresh press, and every page view that triggers a live pull, adds a row t
 trigger (`button` or `page`), whether the sources were contacted, the outcome (`pulled`, `cooldown`, `not-tracked`,
 `budget-reached`) and how many posts came back. Nothing about the visitor is stored. Presses refused by the
 per-visitor limit are turned away before the database is touched and are not logged, so spamming the button cannot
-keep the free database awake. Rows older than `SocialMeter:RefreshLogRetentionDays` (90) are deleted by the deletion
+add load to the database. Rows older than `SocialMeter:RefreshLogRetentionDays` (90) are deleted by the deletion
 sync. Queries for SSMS:
 
 ```sql
