@@ -96,8 +96,30 @@ public sealed class PostQueryService : IPostQueries
                     Label = s.Label,
                     TotalPosts = s.TotalPosts,
                     Confidence = s.Confidence,
-                    Margin = s.Margin
+                    Margin = s.Margin,
+                    CriticsScore = s.CriticsScore
                 });
+    }
+
+    public async Task<IReadOnlyList<SocialMeter.Application.Home.CrowdCritics>> GetCrowdCriticsAsync(CancellationToken ct = default)
+        => await _db.TitleSnapshots
+            .Where(s => s.MediaType != MediaType.Game && s.CriticsScore != null && s.TotalPosts > 0)
+            .Select(s => new SocialMeter.Application.Home.CrowdCritics(s.MediaType, s.TmdbId, s.Score, s.CriticsScore!.Value, s.TotalPosts, s.Confidence))
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<(MediaType MediaType, int TmdbId, IReadOnlyList<(DateOnly Day, int Score)> Days)>> GetScoreSeriesAsync(
+        DateOnly since, int minPosts, CancellationToken ct = default)
+    {
+        var scored = await _db.TitleSnapshots.Where(s => s.TotalPosts >= minPosts).Select(s => new { s.MediaType, s.TmdbId }).ToListAsync(ct);
+        var wanted = scored.Select(s => (s.MediaType, s.TmdbId)).ToHashSet();
+        var ids = scored.Select(s => s.TmdbId).Distinct().ToList();
+        var rows = await _db.ScoreHistory.Where(h => h.Day >= since && ids.Contains(h.TmdbId))
+            .Select(h => new { h.MediaType, h.TmdbId, h.Day, h.Score }).ToListAsync(ct);
+
+        return rows.Where(r => wanted.Contains((r.MediaType, r.TmdbId)))
+            .GroupBy(r => (r.MediaType, r.TmdbId))
+            .Select(g => (g.Key.MediaType, g.Key.TmdbId, (IReadOnlyList<(DateOnly, int)>)g.Select(r => (r.Day, r.Score)).ToList()))
+            .ToList();
     }
 
     public Task<ScoreHistoryDto> GetHistoryAsync(MediaType mediaType, int tmdbId, int days, CancellationToken ct = default)

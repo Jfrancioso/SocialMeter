@@ -4,15 +4,19 @@ namespace SocialMeter.Options;
 /// The home page's rows, in order, by key: a list of slots rather than code, so rows can be reordered or dropped (and,
 /// later, a labelled sponsored row inserted) by changing configuration. Only listed rows are fetched; unknown keys are
 /// skipped; a title appears only in the first row that has it, and a row left empty is hidden.
-/// Keys: horror_trending and horror_theaters (October only), trending, now_playing, seasonal, on_the_air, top_games,
-/// popular_movies, popular_tv, most_played.
+/// Keys: horror_trending and horror_theaters (October only), heating_up, cooling_off, gaps (crowd vs critics), trending,
+/// now_playing, seasonal, on_the_air, top_games, popular_movies, popular_tv, most_played.
+/// heating_up and cooling_off stay hidden until enough daily readings exist for the trend test.
 /// </summary>
 public sealed class HomeOptions
 {
     public const string SectionName = "Home";
 
     /// <summary>Used when configuration lists no rows.</summary>
-    public static readonly IReadOnlyList<string> DefaultRows = new[] { "horror_trending", "trending", "now_playing", "seasonal", "most_played" };
+    public static readonly IReadOnlyList<string> DefaultRows = new[]
+    {
+        "horror_trending", "heating_up", "gaps", "trending", "now_playing", "seasonal", "cooling_off", "most_played"
+    };
 
     // Empty by default on purpose: the configuration binder appends to an existing array or list rather than replacing
     // it, so a default here could never be shortened or reordered by a setting.

@@ -64,13 +64,30 @@ public sealed class HomeController : ControllerBase
             ["popular_tv"] = async () => Row("popular_tv", "Popular shows", null, (await _titles.GetPopularAsync(MediaType.Tv, 1, ct)).Items),
             ["most_played"] = async () => Row("most_played", "Most played right now", "Steam's live player counts", await SafeAsync(_titles.GetPopularAsync(MediaType.Game, 1, ct)))
         };
+        builders["gaps"] = async () =>
+        {
+            var gaps = HomeSignals.BiggestGaps(await _queries.GetCrowdCriticsAsync(ct), minPosts: 15, minConfidence: 0.5, minGap: 10, take: 12);
+            return Row("gaps", "Crowd vs critics", "Where the people and the critics disagree most",
+                await TitlesAsync(gaps.Select(g => (g.MediaType, g.TmdbId)), ct));
+        };
+        // Both momentum rows come from one trend run; each is hidden until the trend test has enough days to say anything.
+        if (wanted.Contains("heating_up") || wanted.Contains("cooling_off"))
+            builders["movers"] = async () =>
+            {
+                var (rising, falling) = await MoversAsync(ct);
+                return new[]
+                {
+                    new HomeRowDto { Key = "heating_up", Title = "Heating up", Subtitle = "Crowd scores climbing day after day", Items = await TitlesAsync(rising.Select(m => (m.MediaType, m.TmdbId)), ct) },
+                    new HomeRowDto { Key = "cooling_off", Title = "Cooling off", Subtitle = "Crowd scores slipping day after day", Items = await TitlesAsync(falling.Select(m => (m.MediaType, m.TmdbId)), ct) }
+                };
+            };
         // October's horror pair comes from one call; it supplies whichever of its two rows are listed.
         if (wanted.Contains("horror_trending") || wanted.Contains("horror_theaters"))
             builders["horror"] = async () => (await _tracker.GetSeasonalTopRowsAsync(region, ct))
                 .Select(r => new HomeRowDto { Key = r.Key, Title = r.Title, Subtitle = r.Subtitle, Items = r.Items }).ToList();
 
         var fetched = await Task.WhenAll(builders
-            .Where(b => wanted.Contains(b.Key) || b.Key == "horror")
+            .Where(b => wanted.Contains(b.Key) || b.Key is "horror" or "movers")
             .Select(b => b.Value()));
         var byKey = fetched.SelectMany(rs => rs).GroupBy(r => r.Key).ToDictionary(g => g.Key, g => g.First());
 
@@ -172,12 +189,36 @@ public sealed class HomeController : ControllerBase
         return (fallback, FeaturedPick.TrendingOnTmdb, null);
     }
 
+    /// <summary>The same trend test as the title page (window, alpha and minimum days), across every well-measured title.</summary>
+    private async Task<(IReadOnlyList<Mover> Rising, IReadOnlyList<Mover> Falling)> MoversAsync(CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var since = today.AddDays(-_options.TrendWindowDays + 1);
+        if (_options.ScoringChangedOn is { } changed && changed > since) since = changed;   // days scored by an older formula don't count
+        var series = await _queries.GetScoreSeriesAsync(since, minPosts: 15, ct);
+        return HomeSignals.Movers(series, _options.TrendAlpha, _options.MinTrendPoints, take: 12);
+    }
+
+    /// <summary>Title details for a list of keys, in order; any that can't be loaded are skipped.</summary>
+    private async Task<IReadOnlyList<Title>> TitlesAsync(IEnumerable<(MediaType MediaType, int TmdbId)> keys, CancellationToken ct)
+    {
+        var titles = await Task.WhenAll(keys.Select(async k =>
+        {
+            try { return await _titles.GetDetailsAsync(k.MediaType, k.TmdbId, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { return null; }
+        }));
+        return titles.OfType<Title>().ToList();
+    }
+
     private static IReadOnlyList<HomeRowDto> Row(string key, string title, string? subtitle, IReadOnlyList<Title> items) =>
         new[] { new HomeRowDto { Key = key, Title = title, Subtitle = subtitle, Items = items } };
 
+    /// <summary>Rows that say something about a title (it's climbing, the critics disagree) rather than list it: they keep every title and never take one from a list row.</summary>
+    public static readonly IReadOnlySet<string> SignalRows = new HashSet<string> { "gaps", "heating_up", "cooling_off" };
+
     /// <summary>
-    /// Each title appears only in the first row (in page order) that has it, so the page shows more titles and fewer
-    /// repeats; a row left with nothing is dropped.
+    /// Each title appears only in the first list row (in page order) that has it, so the page shows more titles and fewer
+    /// repeats; signal rows are exempt. A row left with nothing is dropped.
     /// </summary>
     public static List<HomeRowDto> Dedupe(IEnumerable<HomeRowDto> rows)
     {
@@ -185,7 +226,9 @@ public sealed class HomeController : ControllerBase
         var result = new List<HomeRowDto>();
         foreach (var row in rows)
         {
-            var items = row.Items.Where(t => seen.Add((t.MediaType, t.TmdbId))).ToList();
+            var items = SignalRows.Contains(row.Key)
+                ? row.Items.ToList()
+                : row.Items.Where(t => seen.Add((t.MediaType, t.TmdbId))).ToList();
             if (items.Count > 0)
                 result.Add(new HomeRowDto { Key = row.Key, Title = row.Title, Subtitle = row.Subtitle, Items = items });
         }

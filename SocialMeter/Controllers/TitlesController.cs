@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Ratings;
 using SocialMeter.Contracts.Titles;
 using SocialMeter.Domain.Models;
 
@@ -13,9 +14,11 @@ public sealed class TitlesController : ControllerBase
     private readonly ITitleService _titles;
     private readonly IRatingsService _ratings;
     private readonly ITitleTracker _tracker;
+    private readonly CriticsScores _critics;
 
-    public TitlesController(ITitleService titles, IRatingsService ratings, ITitleTracker tracker)
+    public TitlesController(ITitleService titles, IRatingsService ratings, ITitleTracker tracker, CriticsScores critics)
     {
+        _critics = critics;
         _titles = titles;
         _ratings = ratings;
         _tracker = tracker;
@@ -86,20 +89,10 @@ public sealed class TitlesController : ControllerBase
 
         var ratings = await _ratings.GetRatingsAsync(title, ct);
 
-        // Games compare "players right now" against Steam's all-time consensus; films and shows against the critics.
-        int? baseline;
-        string baselineLabel;
-        if (type == MediaType.Game)
-        {
-            baseline = ratings.FirstOrDefault(r => r.Source == "steam")?.Normalized;
-            baselineLabel = "Steam all-time";
-        }
-        else
-        {
-            var available = ratings.Where(r => r.Normalized is not null).Select(r => r.Normalized!.Value).ToList();
-            baseline = available.Count > 0 ? (int)Math.Round(available.Average()) : null;
-            baselineLabel = "critics";
-        }
+        // Games compare "players right now" against Steam's all-time consensus; films and shows against the critics
+        // (Tomatometer and Metascore only). The value is kept on the title's snapshot for cards and the home page.
+        var (baseline, baselineLabel) = CriticsBaseline.For(type, ratings);
+        await _critics.RecordAsync(type, id, baseline, DateTime.UtcNow, ct);
 
         return Ok(new RatingsResponseDto
         {

@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<TitleRecomputer>();
         services.AddScoped<ModerationService>();
         services.AddScoped<OutboundClicks>();
+        services.AddScoped<Ratings.CriticsScores>();
 
         // Policies and guards: stateless or process-wide, so singletons.
         services.AddSingleton<TrustPolicy>();
@@ -41,6 +42,7 @@ public static class DependencyInjection
         // Background work: the tracked set is rebuilt on a schedule; stored posts are re-checked against their platforms.
         services.AddHostedService<TrackedTitlesWorker>();
         services.AddHostedService<DeletionSyncWorker>();
+        services.AddHostedService<Ratings.CriticsRefreshWorker>();
 
         return services;
     }

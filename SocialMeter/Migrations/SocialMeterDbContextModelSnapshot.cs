@@ -356,6 +356,12 @@ namespace SocialMeter.Migrations
                     b.Property<double>("Confidence")
                         .HasColumnType("float");
 
+                    b.Property<DateTime?>("CriticsCheckedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CriticsScore")
+                        .HasColumnType("int");
+
                     b.Property<double>("EffectivePosts")
                         .HasColumnType("float");
 

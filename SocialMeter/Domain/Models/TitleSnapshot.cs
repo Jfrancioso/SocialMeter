@@ -28,4 +28,10 @@ public sealed class TitleSnapshot
     public int Margin { get; set; } = 50;
 
     public DateTime LastRefreshedAt { get; set; }
+
+    /// <summary>The critics' score on the same 0-100 scale (Tomatometer and Metascore, see CriticsBaseline); null for games and when unknown.</summary>
+    public int? CriticsScore { get; set; }
+
+    /// <summary>When the critics score was last looked up.</summary>
+    public DateTime? CriticsCheckedAt { get; set; }
 }

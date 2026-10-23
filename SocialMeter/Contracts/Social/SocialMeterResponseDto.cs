@@ -126,4 +126,7 @@ public sealed class SnapshotDto
 
     /// <summary>95 % half-width in points.</summary>
     public int Margin { get; init; }
+
+    /// <summary>The critics' score for movies and shows (Tomatometer and Metascore averaged), when known.</summary>
+    public int? CriticsScore { get; init; }
 }

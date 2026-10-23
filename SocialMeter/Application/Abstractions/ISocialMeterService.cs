@@ -27,6 +27,12 @@ public interface IPostQueries
 
     /// <summary>Titles by counted posts created since <paramref name="since"/>, most first, with their reading's confidence.</summary>
     Task<IReadOnlyList<SocialMeter.Application.Home.TalkedAbout>> GetMostTalkedAboutAsync(DateTime since, int minPosts, int take, CancellationToken ct = default);
+
+    /// <summary>Every scored movie and show with a stored critics score.</summary>
+    Task<IReadOnlyList<SocialMeter.Application.Home.CrowdCritics>> GetCrowdCriticsAsync(CancellationToken ct = default);
+
+    /// <summary>Daily scores since <paramref name="since"/> for titles with at least <paramref name="minPosts"/> counted posts.</summary>
+    Task<IReadOnlyList<(MediaType MediaType, int TmdbId, IReadOnlyList<(DateOnly Day, int Score)> Days)>> GetScoreSeriesAsync(DateOnly since, int minPosts, CancellationToken ct = default);
 }
 
 /// <summary>

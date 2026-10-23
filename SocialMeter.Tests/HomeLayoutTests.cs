@@ -27,6 +27,20 @@ public class HomeLayoutTests
     }
 
     [Fact]
+    public void Signal_rows_keep_titles_that_list_rows_already_showed()
+    {
+        var rows = HomeController.Dedupe(new[]
+        {
+            R("horror_trending", T(1), T(2)),
+            R("gaps", T(1)),                  // Clayface is in the horror row and still belongs in "Crowd vs critics"
+            R("trending", T(1), T(3))         // the list row still loses the repeat
+        });
+
+        Assert.Equal(new[] { 1 }, rows.Single(r => r.Key == "gaps").Items.Select(t => t.TmdbId));
+        Assert.Equal(new[] { 3 }, rows.Single(r => r.Key == "trending").Items.Select(t => t.TmdbId));
+    }
+
+    [Fact]
     public void Configuration_can_shorten_and_reorder_the_rows()
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
