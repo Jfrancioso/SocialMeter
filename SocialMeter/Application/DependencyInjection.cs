@@ -63,6 +63,7 @@ public static class DependencyInjection
         services.AddHostedService<Ratings.CriticsRefreshWorker>();
         services.AddHostedService<UsageMeterWorker>();
         services.AddHostedService<WatchWindowWorker>();
+        services.AddHostedService<HomeWarmupWorker>();
 
         return services;
     }

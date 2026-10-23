@@ -44,9 +44,20 @@ public sealed class HomeFeedService
     /// <summary>The home page for a region (a two-letter code the caller has already checked), cached for five minutes.</summary>
     public async Task<HomeResponseDto> GetHomeAsync(string region, CancellationToken ct = default)
     {
-        var key = $"home:{region}";
-        if (_cache.TryGetValue(key, out HomeResponseDto? cached) && cached is not null)
+        if (_cache.TryGetValue(HomeKey(region), out HomeResponseDto? cached) && cached is not null)
             return cached;
+        return await BuildHomeAsync(region, ct);
+    }
+
+    private static string HomeKey(string region) => $"home:{region}";
+
+    /// <summary>
+    /// Builds the home page now and caches it, whatever is cached already. HomeWarmupWorker calls this before the cached
+    /// copy expires, so no visitor waits the ~3 seconds a build takes.
+    /// </summary>
+    public async Task<HomeResponseDto> BuildHomeAsync(string region, CancellationToken ct = default)
+    {
+        var key = HomeKey(region);
 
         var wanted = _home.Effective;
         bool Wants(params string[] keys) => keys.Any(wanted.Contains);
@@ -126,34 +137,38 @@ public sealed class HomeFeedService
     /// own counts, games included) and TMDB's trending list. Built from data already on hand; nothing about the visitor
     /// or what they search for is recorded.
     /// </summary>
-    public async Task<SearchSuggestionsDto> GetSuggestionsAsync(CancellationToken ct = default)
-    {
-        return (await _cache.GetOrCreateAsync("home:suggestions", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TalkedAboutCacheFor;
-            var talked = new List<TalkedAboutDto>();
-            try
-            {
-                var picks = SearchSuggestions.Pick(await MostTalkedAboutAsync(ct));
-                var titles = await Task.WhenAll(picks.Select(p => DetailsOrNullAsync(p.MediaType, p.TmdbId, ct)));
-                talked.AddRange(picks.Zip(titles)
-                    .Where(pair => pair.Second is not null)
-                    .Select(pair => new TalkedAboutDto { Title = pair.Second!, Posts = pair.First.Posts }));
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogWarning(ex, "Search suggestions: most-talked-about lookup failed; offering trending only");
-            }
+    public async Task<SearchSuggestionsDto> GetSuggestionsAsync(CancellationToken ct = default) =>
+        _cache.TryGetValue(SuggestionsKey, out SearchSuggestionsDto? cached) && cached is not null ? cached : await BuildSuggestionsAsync(ct);
 
-            var trending = await _titles.GetTrendingAsync(null, 1, ct);
-            var seen = talked.Select(t => (t.Title.MediaType, t.Title.TmdbId)).ToHashSet();
-            return new SearchSuggestionsDto
-            {
-                TalkedAbout = talked,
-                Trending = trending.Items.Where(t => !seen.Contains((t.MediaType, t.TmdbId))).Take(5).ToList(),
-                WindowDays = WindowDays
-            };
-        }))!;
+    private const string SuggestionsKey = "home:suggestions";
+
+    /// <summary>Builds the search suggestions now and caches them, whatever is cached already (see BuildHomeAsync).</summary>
+    public async Task<SearchSuggestionsDto> BuildSuggestionsAsync(CancellationToken ct = default)
+    {
+        var talked = new List<TalkedAboutDto>();
+        try
+        {
+            var picks = SearchSuggestions.Pick(await MostTalkedAboutAsync(ct));
+            var titles = await Task.WhenAll(picks.Select(p => DetailsOrNullAsync(p.MediaType, p.TmdbId, ct)));
+            talked.AddRange(picks.Zip(titles)
+                .Where(pair => pair.Second is not null)
+                .Select(pair => new TalkedAboutDto { Title = pair.Second!, Posts = pair.First.Posts }));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Search suggestions: most-talked-about lookup failed; offering trending only");
+        }
+
+        var trending = await _titles.GetTrendingAsync(null, 1, ct);
+        var seen = talked.Select(t => (t.Title.MediaType, t.Title.TmdbId)).ToHashSet();
+        var suggestions = new SearchSuggestionsDto
+        {
+            TalkedAbout = talked,
+            Trending = trending.Items.Where(t => !seen.Contains((t.MediaType, t.TmdbId))).Take(5).ToList(),
+            WindowDays = WindowDays
+        };
+        _cache.Set(SuggestionsKey, suggestions, TalkedAboutCacheFor);
+        return suggestions;
     }
 
     private int WindowDays => Math.Clamp(_options.FeaturedWindowDays, 1, 14);

@@ -44,4 +44,10 @@ public sealed class HomeOptions
 
     /// <summary>Titles per signal row.</summary>
     public int SignalRowSize { get; set; } = 12;
+
+    /// <summary>
+    /// How often HomeWarmupWorker rebuilds the cached home page and search suggestions, in minutes; 0 turns it off.
+    /// Shorter than the five-minute cache, so a visitor never meets an expired one. TMDB calls only, no paid ones.
+    /// </summary>
+    public int WarmEveryMinutes { get; set; } = 4;
 }
