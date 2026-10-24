@@ -44,6 +44,7 @@ public static class DependencyInjection
         services.AddScoped<Ratings.CriticsScores>();
         services.AddScoped<GuardrailStatusService>();
         services.AddScoped<HomeFeedService>();
+        services.AddScoped<MostTalkedAbout>();
 
         // Policies and guards: stateless or process-wide, so singletons.
         services.AddSingleton<TrustPolicy>();

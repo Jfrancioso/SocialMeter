@@ -156,23 +156,39 @@ reason. The post leaves the score and the feed at once; the card shows "Post rem
 features the next post. If a word keeps getting through, add it to `BlockedWords` (or `BlockedRoots` for a word that hides
 inside longer words) with a test case in `HighlightTests.cs`.
 
-## The Crowd Shape pilot ("The crowd" on one title page)
+## "The crowd" (Crowd Shape)
 
-Since 2026-10-24 one title page (Other Mommy, `movie_1400837`) shows "The crowd": every counted post as a dot, placed
-from "hated it" to "loved it", sized by its weight in the score and marked with its platform; clicking a dot opens that
-post. Every other title page is unchanged. Code: `Application/Social/CrowdShape.cs` (shape rules + service),
-`CrowdShapeOptions`, UI `components/Title/CrowdShape.vue` and `utils/crowdLayout.js`.
+Since 2026-10-24 some title pages show "The crowd": every counted post as a dot, placed from "hated it" to "loved it",
+sized by its weight in the score and marked with its platform; clicking a dot opens that post. The first time the strip
+scrolls into view the dots drop into place (once; skipped for visitors who turn on reduced motion).
 
-Turn it off (no deploy; the setting change restarts the app, about 30 seconds):
+Which titles get it (`CrowdShapeService`, settings under `CrowdShape`):
+
+| Rule | Setting |
+|---|---|
+| Listed titles, always | `Titles` (Other Mommy, `movie_1400837`, the first pilot) |
+| A title with an open watch window (a live event), always | `Watch:Windows` |
+| The top titles of the home page's "Most talked about" ranking, once they have enough counted posts | `TopTalkedAbout` = 10, `MinPosts` = 20 |
+
+Every other title page is unchanged. Code: `Application/Social/CrowdShape.cs` (rules + service),
+`Application/Home/MostTalkedAbout.cs` (the ranking, shared with the home page), `CrowdShapeOptions`, UI
+`components/Title/CrowdShape.vue`, `utils/crowdLayout.js` and `composables/useInView.js`.
+
+Guardrails: the title checks need no database; one snapshot row then says whether the reading changed, and the posts are
+read again only when it did (cached per reading for 30 minutes), so a busy title costs one small query per view. At most
+`MaxDots` = 200 posts are drawn (the heaviest; phones draw 100); the shares and the shape always use every counted post.
+
+Turn it off everywhere (no deploy; the setting change restarts the app, about 30 seconds):
 
 ```bash
 az webapp config appsettings set -g socialmeter-jf-rg -n socialmeter-jf-api --settings CrowdShape__Enabled=false
 ```
 
-Move it to another title, or add one (`__1`, `__2`, ...):
+Add a title by hand (`__1`, `__2`, ...), or only listed titles and live events (no ranking):
 
 ```bash
-az webapp config appsettings set -g socialmeter-jf-rg -n socialmeter-jf-api --settings CrowdShape__Titles__0=tv_124364
+az webapp config appsettings set -g socialmeter-jf-rg -n socialmeter-jf-api --settings CrowdShape__Titles__1=tv_124364
+az webapp config appsettings set -g socialmeter-jf-rg -n socialmeter-jf-api --settings CrowdShape__TopTalkedAbout=0
 ```
 
 Is anyone using it? Each dot click is one request to the single-post endpoint, which nothing else calls:
@@ -183,7 +199,8 @@ AppRequests
 | summarize clicks = sum(ItemCount) by bin(TimeGenerated, 1d)
 ```
 
-Remove it for good: revert the two pilot commits (API e59bdd6, UI abc3ccc); nothing else depends on them.
+Remove it for good: delete the "The crowd" section from `TitlePage.vue` (the component then goes unused) and the
+`crowd` endpoint; `MostTalkedAbout` stays, since the home page uses it.
 
 ## Useful queries
 

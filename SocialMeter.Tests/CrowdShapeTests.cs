@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using SocialMeter.Application.Home;
 using SocialMeter.Application.Social;
+using SocialMeter.Application.Tracking;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Data;
 using SocialMeter.Options;
@@ -7,7 +10,7 @@ using Xunit;
 
 namespace SocialMeter.Tests;
 
-/// <summary>The Crowd Shape pilot: the shape rules, the one-title switch, and reading a clicked dot's post.</summary>
+/// <summary>"The crowd": the shape rules, which titles show it, the per-reading cache, and reading a clicked dot's post.</summary>
 public class CrowdShapeTests
 {
     [Theory]
@@ -27,16 +30,24 @@ public class CrowdShapeTests
         => Assert.Equal(CrowdShapeRules.Split, CrowdShapeRules.Shape(30, 60, 10, 50));
 
     [Fact]
-    public void The_switch_matches_title_keys_and_can_be_turned_off()
+    public void Listed_and_live_titles_always_show_talked_about_ones_need_enough_posts()
+    {
+        Assert.True(CrowdShapeRules.Shows(listed: true, liveEvent: false, talkedAbout: false, posts: 3, minPosts: 20));
+        Assert.True(CrowdShapeRules.Shows(listed: false, liveEvent: true, talkedAbout: false, posts: 3, minPosts: 20));
+        Assert.True(CrowdShapeRules.Shows(listed: false, liveEvent: false, talkedAbout: true, posts: 20, minPosts: 20));
+        Assert.False(CrowdShapeRules.Shows(listed: false, liveEvent: false, talkedAbout: true, posts: 19, minPosts: 20));
+        Assert.False(CrowdShapeRules.Shows(listed: false, liveEvent: false, talkedAbout: false, posts: 500, minPosts: 20));
+    }
+
+    [Fact]
+    public void Listed_titles_match_whatever_the_case()
     {
         var options = new CrowdShapeOptions { Titles = { "movie_1400837" } };
-        Assert.True(options.IsOn("movie_1400837"));
-        Assert.True(options.IsOn("MOVIE_1400837"));
-        Assert.False(options.IsOn("tv_124364"));
-
-        options.Enabled = false;
-        Assert.False(options.IsOn("movie_1400837"));
+        Assert.True(options.IsListed("MOVIE_1400837"));
+        Assert.False(options.IsListed("tv_124364"));
     }
+
+    // ---- the service ----
 
     private static SocialMeterDbContext Db() =>
         new(new DbContextOptionsBuilder<SocialMeterDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
@@ -58,33 +69,60 @@ public class CrowdShapeTests
         CreatedAt = DateTime.UtcNow.AddDays(-1)
     };
 
-    private static CrowdShapeService Service(SocialMeterDbContext db, CrowdShapeOptions options) =>
-        new(db, Microsoft.Extensions.Options.Options.Create(options));
+    /// <summary>Adds posts for a title and the snapshot row the service checks; returns the snapshot.</summary>
+    private static async Task<TitleSnapshot> AddTitleAsync(SocialMeterDbContext db, int tmdbId, int positive, int negative)
+    {
+        for (var i = 0; i < positive; i++) db.SocialPosts.Add(Post(tmdbId, Sentiment.Positive, 0.8, platform: i % 2 == 0 ? "x" : "bluesky"));
+        for (var i = 0; i < negative; i++) db.SocialPosts.Add(Post(tmdbId, Sentiment.Negative, -0.6));
+        var snapshot = new TitleSnapshot { TmdbId = tmdbId, MediaType = MediaType.Movie, TotalPosts = positive + negative, LastRefreshedAt = DateTime.UtcNow };
+        db.TitleSnapshots.Add(snapshot);
+        await db.SaveChangesAsync();
+        return snapshot;
+    }
+
+    private static CrowdShapeService Service(SocialMeterDbContext db, CrowdShapeOptions options, WatchOptions? watch = null, IMemoryCache? cache = null)
+    {
+        cache ??= new MemoryCache(new MemoryCacheOptions());
+        var social = Microsoft.Extensions.Options.Options.Create(new SocialMeterOptions { FeaturedWindowDays = 3, FeaturedMinPosts = 1 });
+        var queries = new PostQueryService(db, new ScoreHistoryService(db, new PullGate(), social));
+        return new CrowdShapeService(db, Microsoft.Extensions.Options.Options.Create(options),
+            new WatchWindows(new TestOptionsMonitor<WatchOptions>(watch ?? new WatchOptions()), TimeProvider.System),
+            new MostTalkedAbout(queries, social, cache), cache);
+    }
 
     [Fact]
-    public async Task A_title_outside_the_pilot_gets_nothing()
+    public async Task A_title_that_is_not_listed_live_or_talked_about_gets_nothing()
     {
         var db = Db();
-        db.SocialPosts.Add(Post(2, Sentiment.Positive, 0.8));
-        await db.SaveChangesAsync();
+        await AddTitleAsync(db, 1, 30, 5);
 
-        var result = await Service(db, new CrowdShapeOptions { Titles = { "movie_1" } }).GetAsync(MediaType.Movie, 2);
+        var result = await Service(db, new CrowdShapeOptions { TopTalkedAbout = 0 }).GetAsync(MediaType.Movie, 1);
 
         Assert.False(result.Enabled);
         Assert.Empty(result.Dots);
     }
 
     [Fact]
-    public async Task A_pilot_title_gets_every_counted_post_as_a_dot_and_its_shape()
+    public async Task The_switch_turns_it_off_even_for_a_listed_title()
     {
         var db = Db();
-        for (var i = 0; i < 6; i++) db.SocialPosts.Add(Post(1, Sentiment.Positive, 0.8, platform: i % 2 == 0 ? "x" : "bluesky"));
-        for (var i = 0; i < 5; i++) db.SocialPosts.Add(Post(1, Sentiment.Negative, -0.6));
+        await AddTitleAsync(db, 1, 6, 5);
+
+        var result = await Service(db, new CrowdShapeOptions { Enabled = false, Titles = { "movie_1" } }).GetAsync(MediaType.Movie, 1);
+
+        Assert.False(result.Enabled);
+    }
+
+    [Fact]
+    public async Task A_listed_title_gets_every_counted_post_as_a_dot_and_its_shape()
+    {
+        var db = Db();
+        await AddTitleAsync(db, 1, 6, 5);
         db.SocialPosts.Add(Post(1, Sentiment.Positive, 0.9, upvotes: 5000, excluded: true));   // filtered: never a dot
-        db.SocialPosts.Add(Post(2, Sentiment.Negative, -0.9));                                  // another title
+        await AddTitleAsync(db, 2, 0, 1);                                                    // another title
         await db.SaveChangesAsync();
 
-        var result = await Service(db, new CrowdShapeOptions { Titles = { "movie_1" } }).GetAsync(MediaType.Movie, 1);
+        var result = await Service(db, new CrowdShapeOptions { Titles = { "movie_1" }, TopTalkedAbout = 0 }).GetAsync(MediaType.Movie, 1);
 
         Assert.True(result.Enabled);
         Assert.Equal(11, result.Posts);
@@ -97,14 +135,62 @@ public class CrowdShapeTests
     }
 
     [Fact]
+    public async Task A_live_event_title_shows_without_being_listed()
+    {
+        var db = Db();
+        await AddTitleAsync(db, 7, 4, 1);
+        var now = DateTimeOffset.UtcNow;
+        var watch = new WatchOptions { Windows = { new WatchWindow { MediaType = MediaType.Movie, TmdbId = 7, Label = "Watch party tonight", StartsAt = now.AddHours(-1), EndsAt = now.AddHours(2) } } };
+
+        var result = await Service(db, new CrowdShapeOptions { TopTalkedAbout = 0 }, watch).GetAsync(MediaType.Movie, 7);
+
+        Assert.True(result.Enabled);
+        Assert.Equal(CrowdShapeRules.Early, result.Shape);   // five posts: shown, but too few to call
+    }
+
+    [Fact]
+    public async Task Talked_about_titles_show_once_they_have_enough_posts()
+    {
+        var db = Db();
+        await AddTitleAsync(db, 1, 20, 10);   // the most talked about, 30 posts
+        await AddTitleAsync(db, 2, 8, 2);     // second, only 10 posts
+        await AddTitleAsync(db, 3, 3, 1);     // third: outside the top 2
+        var options = new CrowdShapeOptions { TopTalkedAbout = 2, MinPosts = 20 };
+
+        Assert.True((await Service(db, options).GetAsync(MediaType.Movie, 1)).Enabled);
+        Assert.False((await Service(db, options).GetAsync(MediaType.Movie, 2)).Enabled);
+        Assert.False((await Service(db, options).GetAsync(MediaType.Movie, 3)).Enabled);
+    }
+
+    [Fact]
+    public async Task The_crowd_is_built_once_per_reading_and_rebuilt_when_the_reading_changes()
+    {
+        var db = Db();
+        var snapshot = await AddTitleAsync(db, 1, 6, 5);
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var options = new CrowdShapeOptions { Titles = { "movie_1" }, TopTalkedAbout = 0 };
+
+        Assert.Equal(11, (await Service(db, options, cache: cache).GetAsync(MediaType.Movie, 1)).Posts);
+
+        // A post arrives but the reading hasn't been recomputed yet: the cached crowd is still served.
+        db.SocialPosts.Add(Post(1, Sentiment.Positive, 0.8));
+        await db.SaveChangesAsync();
+        Assert.Equal(11, (await Service(db, options, cache: cache).GetAsync(MediaType.Movie, 1)).Posts);
+
+        // The reading is recomputed (a new read, or a post hidden): the crowd is rebuilt.
+        snapshot.TotalPosts = 12;
+        await db.SaveChangesAsync();
+        Assert.Equal(12, (await Service(db, options, cache: cache).GetAsync(MediaType.Movie, 1)).Posts);
+    }
+
+    [Fact]
     public async Task Only_the_heaviest_posts_are_drawn_when_there_are_too_many_but_the_shares_use_all()
     {
         var db = Db();
         db.SocialPosts.Add(Post(1, Sentiment.Negative, -0.8, upvotes: 900));
-        for (var i = 0; i < 12; i++) db.SocialPosts.Add(Post(1, Sentiment.Positive, 0.8, upvotes: 1));
-        await db.SaveChangesAsync();
+        await AddTitleAsync(db, 1, 12, 0);
 
-        var result = await Service(db, new CrowdShapeOptions { Titles = { "movie_1" }, MaxDots = 3 }).GetAsync(MediaType.Movie, 1);
+        var result = await Service(db, new CrowdShapeOptions { Titles = { "movie_1" }, TopTalkedAbout = 0, MaxDots = 3 }).GetAsync(MediaType.Movie, 1);
 
         Assert.Equal(13, result.Posts);
         Assert.Equal(3, result.Dots.Count);

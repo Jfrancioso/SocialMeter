@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Home;
+using SocialMeter.Application.Tracking;
 using SocialMeter.Contracts.Social;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Data;
@@ -9,7 +12,8 @@ using SocialMeter.Options;
 namespace SocialMeter.Application.Social;
 
 /// <summary>
-/// The shape of a title's crowd, from the shares of its counted weight. Pure, so the tests pin the thresholds down.
+/// The shape of a title's crowd, from the shares of its counted weight, and which titles show it. Pure, so the tests pin
+/// the thresholds down.
 ///
 /// Why it exists: almost no post is neutral (0-20% of the weight on every title checked 2026-10-23), so a middling score
 /// usually means a fight, not a shrug. Other Mommy read "49 Lukewarm" while 45% of the weight loved it and 43% hated it.
@@ -17,7 +21,7 @@ namespace SocialMeter.Application.Social;
 public static class CrowdShapeRules
 {
     /// <summary>Below this many counted posts the shape is "early": too few to call.</summary>
-    public const int MinPosts = 10;
+    public const int EarlyBelow = 10;
 
     /// <summary>Both sides at least this share (percent): the crowd is split.</summary>
     public const double SplitShare = 30;
@@ -30,33 +34,74 @@ public static class CrowdShapeRules
     /// <summary>Shares are percentages of the counted weight; checked in this order.</summary>
     public static string Shape(double positive, double negative, double neutral, int posts)
     {
-        if (posts < MinPosts) return Early;
+        if (posts < EarlyBelow) return Early;
         if (positive >= SplitShare && negative >= SplitShare) return Split;
         if (positive >= LovedShare) return Loved;
         if (negative >= PannedShare) return Panned;
         if (neutral >= MixedShare) return Mixed;
         return positive >= negative ? LeaningPositive : LeaningNegative;
     }
+
+    /// <summary>Who gets "The crowd": a listed title or a live event always; a most-talked-about title once it has enough posts.</summary>
+    public static bool Shows(bool listed, bool liveEvent, bool talkedAbout, int posts, int minPosts) =>
+        listed || liveEvent || (talkedAbout && posts >= minPosts);
 }
 
-/// <summary>"The crowd" for pilot titles (CrowdShape:Titles). Reads stored posts only; never contacts the sources.</summary>
+/// <summary>
+/// "The crowd" for a title page: every counted post as a dot, no text. Reads stored posts only; never contacts the sources.
+///
+/// Guardrails, cheapest first: the switch and the title checks need no database; then one snapshot row says whether the
+/// reading changed since the crowd was last built (a new read moves LastRefreshedAt, a hidden post moves the counts),
+/// and only a changed reading reads the posts again. So a busy title costs one small query per view, not every post.
+/// </summary>
 public sealed class CrowdShapeService : ICrowdShape
 {
+    private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(30);
+    private static readonly CrowdShapeDto Off = new() { Enabled = false };
+
     private readonly SocialMeterDbContext _db;
     private readonly CrowdShapeOptions _options;
+    private readonly WatchWindows _watch;
+    private readonly MostTalkedAbout _talkedAbout;
+    private readonly IMemoryCache _cache;
 
-    public CrowdShapeService(SocialMeterDbContext db, IOptions<CrowdShapeOptions> options)
+    public CrowdShapeService(SocialMeterDbContext db, IOptions<CrowdShapeOptions> options, WatchWindows watch, MostTalkedAbout talkedAbout, IMemoryCache cache)
     {
         _db = db;
         _options = options.Value;
+        _watch = watch;
+        _talkedAbout = talkedAbout;
+        _cache = cache;
     }
 
     public async Task<CrowdShapeDto> GetAsync(MediaType mediaType, int tmdbId, CancellationToken ct = default)
     {
-        // Outside the pilot: answered without touching the database.
-        if (!_options.IsOn($"{mediaType.ToString().ToLowerInvariant()}_{tmdbId}"))
-            return new CrowdShapeDto { Enabled = false };
+        if (!_options.Enabled) return Off;
 
+        var key = $"{mediaType.ToString().ToLowerInvariant()}_{tmdbId}";
+        var listed = _options.IsListed(key);
+        var live = _watch.OpenFor(mediaType, tmdbId) is not null;
+        var talkedAbout = !listed && !live && _options.TopTalkedAbout > 0
+            && (await _talkedAbout.GetAsync(ct)).Take(_options.TopTalkedAbout).Any(t => t.MediaType == mediaType && t.TmdbId == tmdbId);
+        if (!listed && !live && !talkedAbout) return Off;
+
+        var stamp = await _db.TitleSnapshots
+            .Where(s => s.TmdbId == tmdbId && s.MediaType == mediaType)
+            .Select(s => new { s.LastRefreshedAt, s.TotalPosts, s.FilteredPosts })
+            .SingleOrDefaultAsync(ct);
+        if (stamp is null) return Off;
+
+        var crowd = await _cache.GetOrCreateAsync($"crowd:{key}:{stamp.LastRefreshedAt.Ticks}:{stamp.TotalPosts}:{stamp.FilteredPosts}", entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheFor;
+            return BuildAsync(mediaType, tmdbId, ct);
+        });
+
+        return crowd is not null && CrowdShapeRules.Shows(listed, live, talkedAbout, crowd.Posts, _options.MinPosts) ? crowd : Off;
+    }
+
+    private async Task<CrowdShapeDto> BuildAsync(MediaType mediaType, int tmdbId, CancellationToken ct)
+    {
         var now = DateTime.UtcNow;
 
         // Numbers only, no post text: the same projection trick as PostQueryService.
@@ -85,6 +130,7 @@ public sealed class CrowdShapeService : ICrowdShape
             Positive = positive,
             Negative = negative,
             Neutral = neutral,
+            // Heaviest first: the page draws from the front of this list when it has room for fewer.
             Dots = posts
                 .OrderByDescending(p => weights[p.Id])
                 .Take(Math.Max(0, _options.MaxDots))

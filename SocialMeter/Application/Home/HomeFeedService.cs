@@ -20,23 +20,24 @@ namespace SocialMeter.Application.Home;
 public sealed class HomeFeedService
 {
     private static readonly TimeSpan HomeCacheFor = TimeSpan.FromMinutes(5);
-    private static readonly TimeSpan TalkedAboutCacheFor = TimeSpan.FromMinutes(15);
 
     private readonly ITitleService _titles;
     private readonly ITitleTracker _tracker;
     private readonly IPostQueries _queries;
+    private readonly MostTalkedAbout _talkedAbout;
     private readonly SocialMeterOptions _options;
     private readonly HomeOptions _home;
     private readonly IMemoryCache _cache;
     private readonly WatchWindows _watch;
     private readonly ILogger<HomeFeedService> _logger;
 
-    public HomeFeedService(ITitleService titles, ITitleTracker tracker, IPostQueries queries, IOptions<SocialMeterOptions> options,
-        IOptions<HomeOptions> home, IMemoryCache cache, WatchWindows watch, ILogger<HomeFeedService> logger)
+    public HomeFeedService(ITitleService titles, ITitleTracker tracker, IPostQueries queries, MostTalkedAbout talkedAbout,
+        IOptions<SocialMeterOptions> options, IOptions<HomeOptions> home, IMemoryCache cache, WatchWindows watch, ILogger<HomeFeedService> logger)
     {
         _titles = titles;
         _tracker = tracker;
         _queries = queries;
+        _talkedAbout = talkedAbout;
         _options = options.Value;
         _home = home.Value;
         _cache = cache;
@@ -152,7 +153,7 @@ public sealed class HomeFeedService
         var talked = new List<TalkedAboutDto>();
         try
         {
-            var picks = SearchSuggestions.Pick(await MostTalkedAboutAsync(ct));
+            var picks = SearchSuggestions.Pick(await _talkedAbout.GetAsync(ct));
             var titles = await Task.WhenAll(picks.Select(p => DetailsOrNullAsync(p.MediaType, p.TmdbId, ct)));
             talked.AddRange(picks.Zip(titles)
                 .Where(pair => pair.Second is not null)
@@ -169,24 +170,11 @@ public sealed class HomeFeedService
         {
             TalkedAbout = talked,
             Trending = trending.Items.Where(t => !seen.Contains((t.MediaType, t.TmdbId))).Take(5).ToList(),
-            WindowDays = WindowDays
+            WindowDays = _talkedAbout.WindowDays
         };
-        _cache.Set(SuggestionsKey, suggestions, TalkedAboutCacheFor);
+        _cache.Set(SuggestionsKey, suggestions, MostTalkedAbout.CacheFor);
         return suggestions;
     }
-
-    private int WindowDays => Math.Clamp(_options.FeaturedWindowDays, 1, 14);
-
-    /// <summary>
-    /// The titles with the most counted posts over the featured window, shared by the hero and the search suggestions.
-    /// The counts change only when titles are pulled, so they are cached for a while.
-    /// </summary>
-    private async Task<IReadOnlyList<TalkedAbout>> MostTalkedAboutAsync(CancellationToken ct) =>
-        await _cache.GetOrCreateAsync("home:most-talked-about", entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TalkedAboutCacheFor;
-            return _queries.GetMostTalkedAboutAsync(DateTime.UtcNow.AddDays(-WindowDays), Math.Max(1, _options.FeaturedMinPosts), 30, ct);
-        }) ?? Array.Empty<TalkedAbout>();
 
     /// <summary>
     /// The hero: an open watch window's title (a live event) while one is open; else the tracked movie or show people are
@@ -199,7 +187,7 @@ public sealed class HomeFeedService
 
         try
         {
-            var candidates = await MostTalkedAboutAsync(ct);
+            var candidates = await _talkedAbout.GetAsync(ct);
             var tracked = new HashSet<(MediaType, int)>();
             foreach (var c in candidates)
                 if (await _tracker.GetReasonAsync(c.MediaType, c.TmdbId, ct) is not null)
