@@ -48,17 +48,17 @@ public sealed class AdminController : ControllerBase
             : BadRequest(new ProblemDetails { Status = 400, Title = "returnTo must be the site's /admin page" });
 
     /// <summary>
-    /// For an absolute https (or localhost) address on one of the site's origins whose path is /admin or below: that
-    /// origin as configured. Otherwise null.
+    /// For an absolute https (or localhost) address on one of the site's origins whose path is the given page (/admin, or
+    /// /shelf for the reading shelf) or below: that origin as configured. Otherwise null.
     /// </summary>
-    public static string? SafeReturnOrigin(string? returnTo, IEnumerable<string> origins)
+    public static string? SafeReturnOrigin(string? returnTo, IEnumerable<string> origins, string page = "/admin")
     {
         if (string.IsNullOrWhiteSpace(returnTo) || !Uri.TryCreate(returnTo, UriKind.Absolute, out var uri)) return null;
         if (uri.Scheme != Uri.UriSchemeHttps && !(uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)) return null;
         if (!string.IsNullOrEmpty(uri.UserInfo)) return null;
 
         var path = uri.AbsolutePath;
-        if (path != "/admin" && !path.StartsWith("/admin/", StringComparison.Ordinal)) return null;
+        if (path != page && !path.StartsWith(page + "/", StringComparison.Ordinal)) return null;
 
         var origin = uri.GetLeftPart(UriPartial.Authority);
         return origins.Select(o => o.TrimEnd('/')).FirstOrDefault(o => string.Equals(o, origin, StringComparison.OrdinalIgnoreCase));

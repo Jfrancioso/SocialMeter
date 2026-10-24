@@ -19,6 +19,12 @@ public sealed class RequireAdminAttribute : Attribute, IAsyncAuthorizationFilter
     public const string ActorItem = "admin.actor";
     public const string KeyActor = "admin key";
 
+    /// <summary>
+    /// Also admit the emails on Shelf:Readers, for reads only (GET and HEAD). Set on the reading shelf's controller and
+    /// nowhere else, so a reader can never use an admin endpoint.
+    /// </summary>
+    public bool ReadersToo { get; set; }
+
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
         var http = context.HttpContext;
@@ -44,6 +50,11 @@ public sealed class RequireAdminAttribute : Attribute, IAsyncAuthorizationFilter
             if (result.Succeeded)
             {
                 var email = result.Principal?.FindFirst(CloudflareAccess.EmailClaim)?.Value;
+                if (IsReaderAllowed(email, http.Request.Method, ReadersToo, admin, http.RequestServices.GetRequiredService<IOptions<ShelfOptions>>().Value))
+                {
+                    http.Items[ActorItem] = email!;
+                    return;
+                }
                 if (AdminKey.IsAdminEmail(email, admin))
                 {
                     if (!IsFromOwnSite(http.Request.Method, http.Request.Headers.Origin.FirstOrDefault(),
@@ -69,6 +80,14 @@ public sealed class RequireAdminAttribute : Attribute, IAsyncAuthorizationFilter
 
         context.Result = new UnauthorizedObjectResult(new ProblemDetails { Status = 401, Title = "Sign in required" });
     }
+
+    /// <summary>
+    /// A reader (Shelf:Readers) who isn't also an admin gets in only where the endpoint says <see cref="ReadersToo"/>, and
+    /// only to read. Admins are decided by the admin check that follows, never here.
+    /// </summary>
+    public static bool IsReaderAllowed(string? email, string method, bool readersToo, AdminOptions admin, ShelfOptions shelf) =>
+        readersToo && (HttpMethods.IsGet(method) || HttpMethods.IsHead(method))
+        && !AdminKey.IsAdminEmail(email, admin) && shelf.IsReader(email);
 
     /// <summary>
     /// A change (any method but GET, HEAD or OPTIONS) made with the browser's sign-in must come from the site itself. The

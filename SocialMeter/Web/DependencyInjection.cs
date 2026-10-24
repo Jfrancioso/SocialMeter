@@ -21,6 +21,12 @@ public static class DependencyInjection
     public static IServiceCollection AddWeb(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<AdminOptions>(configuration.GetSection(AdminOptions.SectionName));
+        services.Configure<ShelfOptions>(configuration.GetSection(ShelfOptions.SectionName));
+        services.AddHttpClient(Controllers.ShelfController.CoverClient, http =>
+        {
+            http.Timeout = TimeSpan.FromSeconds(10);
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Chatterbub/1.0 (+https://chatterbub.com)");
+        });
         services.AddCloudflareAccess(configuration);
         services.AddTelemetry(configuration);
 
