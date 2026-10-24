@@ -45,6 +45,38 @@ public static class CrowdShapeRules
     /// <summary>Who gets "The crowd": a listed title or a live event always; a most-talked-about title once it has enough posts.</summary>
     public static bool Shows(bool listed, bool liveEvent, bool talkedAbout, int posts, int minPosts) =>
         listed || liveEvent || (talkedAbout && posts >= minPosts);
+
+    /// <summary>
+    /// How many dots each side gets when not every post can be drawn: in proportion to its share of the weight, so the
+    /// dots tell the same story as the shares. (Taking the heaviest posts overall did not: on WARDOGS the hated reviews
+    /// weigh more one by one, so the heaviest 100 were 98 hated and 2 loved, though loved held 22% of the weight.)
+    /// Every side with posts gets one first, then each next dot goes to the side with the most share per dot (the
+    /// D'Hondt method), never more than a side has. The front end's pickDots follows the same rule.
+    /// </summary>
+    public static IReadOnlyDictionary<Sentiment, int> DotsPerSide(IReadOnlyDictionary<Sentiment, (int Posts, double Share)> sides, int maxDots)
+    {
+        var given = sides.Keys.ToDictionary(s => s, _ => 0);
+        var open = sides.Where(s => s.Value.Posts > 0).Select(s => s.Key).ToList();
+        var left = Math.Max(0, maxDots);
+
+        foreach (var s in open.OrderByDescending(s => sides[s].Share))
+        {
+            if (left == 0) break;
+            given[s] = 1;
+            left--;
+        }
+        while (left > 0)
+        {
+            var next = open.Where(s => given[s] < sides[s].Posts)
+                .OrderByDescending(s => sides[s].Share / (given[s] + 1))
+                .Cast<Sentiment?>()
+                .FirstOrDefault();
+            if (next is null) break;
+            given[next.Value]++;
+            left--;
+        }
+        return given;
+    }
 }
 
 /// <summary>
@@ -122,6 +154,17 @@ public sealed class CrowdShapeService : ICrowdShape
         var negative = Pct(Sentiment.Negative);
         var neutral = Pct(Sentiment.Neutral);
 
+        // When not every post can be drawn, each side's heaviest, in proportion to its share (see DotsPerSide).
+        var perSide = CrowdShapeRules.DotsPerSide(new Dictionary<Sentiment, (int, double)>
+        {
+            [Sentiment.Positive] = (posts.Count(p => p.Sentiment == Sentiment.Positive), positive),
+            [Sentiment.Negative] = (posts.Count(p => p.Sentiment == Sentiment.Negative), negative),
+            [Sentiment.Neutral] = (posts.Count(p => p.Sentiment == Sentiment.Neutral), neutral)
+        }, _options.MaxDots);
+        var drawn = posts.GroupBy(p => p.Sentiment)
+            .SelectMany(g => g.OrderByDescending(p => weights[p.Id]).Take(perSide[g.Key]))
+            .OrderByDescending(p => weights[p.Id]);
+
         return new CrowdShapeDto
         {
             Enabled = true,
@@ -130,10 +173,8 @@ public sealed class CrowdShapeService : ICrowdShape
             Positive = positive,
             Negative = negative,
             Neutral = neutral,
-            // Heaviest first: the page draws from the front of this list when it has room for fewer.
-            Dots = posts
-                .OrderByDescending(p => weights[p.Id])
-                .Take(Math.Max(0, _options.MaxDots))
+            // Heaviest first (the entrance lands them in this order); a page with room for fewer picks again by side.
+            Dots = drawn
                 .Select(p => new CrowdDotDto
                 {
                     Id = p.Id,

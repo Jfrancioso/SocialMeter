@@ -21,7 +21,10 @@ public sealed class CrowdShapeOptions
     /// <summary>A most-talked-about title needs this many counted posts; fewer dots don't show a shape. Listed and live titles always show.</summary>
     public int MinPosts { get; set; } = 20;
 
-    /// <summary>At most this many posts are drawn, the heaviest first; the shares and the shape always use every counted post.</summary>
+    /// <summary>
+    /// At most this many posts are drawn: each side's heaviest, in proportion to its share (CrowdShapeRules.DotsPerSide).
+    /// The shares and the shape always use every counted post.
+    /// </summary>
     public int MaxDots { get; set; } = 200;
 
     public bool IsListed(string titleKey) => Titles.Contains(titleKey, StringComparer.OrdinalIgnoreCase);

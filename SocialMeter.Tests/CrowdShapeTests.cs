@@ -40,6 +40,37 @@ public class CrowdShapeTests
     }
 
     [Fact]
+    public void Dots_are_shared_out_by_weight_not_taken_heaviest_first()
+    {
+        // WARDOGS on 2026-10-24: 113 loved posts held 22% of the weight, but the heaviest 100 were 98 hated and 2 loved.
+        var given = CrowdShapeRules.DotsPerSide(new Dictionary<Sentiment, (int, double)>
+        {
+            [Sentiment.Positive] = (113, 22.3),
+            [Sentiment.Negative] = (255, 77.6),
+            [Sentiment.Neutral] = (0, 0.1)
+        }, 100);
+
+        Assert.Equal(22, given[Sentiment.Positive]);
+        Assert.Equal(78, given[Sentiment.Negative]);
+        Assert.Equal(0, given[Sentiment.Neutral]);   // no posts, no dots
+    }
+
+    [Fact]
+    public void A_small_side_still_gets_a_dot_and_a_short_side_passes_its_room_on()
+    {
+        var given = CrowdShapeRules.DotsPerSide(new Dictionary<Sentiment, (int, double)>
+        {
+            [Sentiment.Positive] = (3, 39.5),
+            [Sentiment.Negative] = (50, 60),
+            [Sentiment.Neutral] = (1, 0.5)
+        }, 20);
+
+        Assert.Equal(1, given[Sentiment.Neutral]);
+        Assert.Equal(3, given[Sentiment.Positive]);   // all it has
+        Assert.Equal(16, given[Sentiment.Negative]);  // the rest
+    }
+
+    [Fact]
     public void Listed_titles_match_whatever_the_case()
     {
         var options = new CrowdShapeOptions { Titles = { "movie_1400837" } };
