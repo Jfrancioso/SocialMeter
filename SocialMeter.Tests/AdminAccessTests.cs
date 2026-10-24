@@ -119,4 +119,22 @@ public class AdminAccessTests
         Assert.Equal(expected, origin is not null);
         if (origin is not null) Assert.Contains(origin, origins);   // the configured value, never the request's text
     }
+
+    // A signed-in admin's browser sends the sign-in cookie with any request, even one another site's page starts; a change
+    // counts only when the browser says it came from the site itself.
+    [Theory]
+    [InlineData("POST", "https://chatterbub.com", true)]
+    [InlineData("POST", "https://chatterbub.com/", true)]
+    [InlineData("POST", "https://evil.example", false)]
+    [InlineData("POST", "https://chatterbub.com.evil.example", false)]
+    [InlineData("POST", "null", false)]
+    [InlineData("POST", null, false)]
+    [InlineData("DELETE", "https://evil.example", false)]
+    [InlineData("GET", "https://evil.example", true)]
+    [InlineData("GET", null, true)]
+    public void Signed_in_changes_must_come_from_the_site(string method, string? origin, bool allowed)
+    {
+        var origins = new[] { "https://chatterbub.com", "https://www.chatterbub.com" };
+        Assert.Equal(allowed, RequireAdminAttribute.IsFromOwnSite(method, origin, origins));
+    }
 }

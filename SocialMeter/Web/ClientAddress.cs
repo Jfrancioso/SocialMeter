@@ -34,9 +34,21 @@ public static class ClientAddress
 
         if (IsCloudflare(remote)
             && IPAddress.TryParse(ctx.Request.Headers[CloudflareHeader].FirstOrDefault(), out var visitor))
-            return (visitor.IsIPv4MappedToIPv6 ? visitor.MapToIPv4() : visitor).ToString();
+            return Key(visitor.IsIPv4MappedToIPv6 ? visitor.MapToIPv4() : visitor);
 
-        return remote.ToString();
+        return Key(remote);
+    }
+
+    /// <summary>
+    /// The key for one visitor: the address for IPv4, the /64 network for IPv6. A home or phone line gets a whole IPv6 /64
+    /// and can use any address in it, so a key per address would let one visitor walk past every per-visitor limit.
+    /// </summary>
+    public static string Key(IPAddress address)
+    {
+        if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetworkV6) return address.ToString();
+        var bytes = address.GetAddressBytes();
+        Array.Clear(bytes, 8, 8);
+        return $"{new IPAddress(bytes)}/64";
     }
 
     public static bool IsCloudflare(IPAddress address) => CloudflareRanges.Any(r => r.Contains(address));

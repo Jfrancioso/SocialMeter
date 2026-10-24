@@ -253,4 +253,21 @@ public class ModerationTests
         Assert.Equal(("positive", "negative"), (log[0].FromLabel, log[0].ToLabel));
         Assert.False((await sut.UndoRelabelAsync(troll.Id, "joey@example.com"))!.Changed);   // nothing left to undo
     }
+
+    [Fact]
+    public async Task A_second_relabel_still_undoes_to_the_assessors_label()
+    {
+        var (sut, db) = Service();
+        var posts = await SeedAsync(db);
+        var troll = posts.Last();   // the assessor said negative
+
+        await sut.RelabelAsync(troll.Id, Sentiment.Positive, "sarcasm: it's praise", "Test Movie", "joey@example.com");
+        await sut.RelabelAsync(troll.Id, Sentiment.Neutral, "on reflection, just a joke", "Test Movie", "joey@example.com");
+        var log = await sut.RecentAsync(10);
+        var undone = await sut.UndoRelabelAsync(troll.Id, "joey@example.com");
+
+        Assert.Equal(("negative", "neutral"), (log[0].FromLabel, log[0].ToLabel));   // compared with the assessor, not the first fix
+        Assert.Equal("negative", undone!.Sentiment);
+        Assert.False(undone.LabelFixed);
+    }
 }

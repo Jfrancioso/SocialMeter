@@ -43,19 +43,34 @@ public sealed class ModerationService
     /// Corrects the post's label by hand, with the operator's reason (<paramref name="note"/>, already checked with
     /// PostModeration.CleanNote). The log keeps the assessor's label from before. Null when there is no such post.
     /// </summary>
-    public Task<ModerationResultDto?> RelabelAsync(int postId, Sentiment label, string note, string? titleName, string actor, CancellationToken ct = default)
+    public async Task<ModerationResultDto?> RelabelAsync(int postId, Sentiment label, string note, string? titleName, string actor, CancellationToken ct = default)
     {
+        // Relabelling a post that is already fixed keeps "from" as the assessor's label from before the first relabel, so
+        // Undo always goes back to the assessor and the corrections record compares the operator with the assessor, never
+        // with an earlier correction.
+        var previous = await LatestRelabelAsync(postId, ct);
         string? fromLabel = null;
         double? fromScore = null;
-        return ApplyAsync(postId, actor, titleName, ModerationAction.Relabel, null,
+        return await ApplyAsync(postId, actor, titleName, ModerationAction.Relabel, null,
             (post, now) =>
             {
-                (fromLabel, fromScore) = (Label(post.Sentiment), post.SentimentScore);
+                (fromLabel, fromScore) = post.LabelFixedAt is not null && previous is not null
+                    ? (previous.FromLabel, previous.FromScore)
+                    : (Label(post.Sentiment), post.SentimentScore);
                 return PostModeration.Relabel(post, label, now);
             },
             ct,
             entry => (entry.FromLabel, entry.FromScore, entry.ToLabel, entry.Note) = (fromLabel, fromScore, Label(label), note));
     }
+
+    private sealed record RelabelFrom(string? FromLabel, double? FromScore);
+
+    private Task<RelabelFrom?> LatestRelabelAsync(int postId, CancellationToken ct) =>
+        _db.ModerationActions
+            .Where(a => a.PostId == postId && a.Action == ModerationAction.Relabel)
+            .OrderByDescending(a => a.At).ThenByDescending(a => a.Id)
+            .Select(a => new RelabelFrom(a.FromLabel, a.FromScore))
+            .FirstOrDefaultAsync(ct);
 
     /// <summary>
     /// Undoes the latest relabel: the label from before it comes back, and later re-reads may change it again. Null when
@@ -63,11 +78,7 @@ public sealed class ModerationService
     /// </summary>
     public async Task<ModerationResultDto?> UndoRelabelAsync(int postId, string actor, CancellationToken ct = default)
     {
-        var last = await _db.ModerationActions
-            .Where(a => a.PostId == postId && a.Action == ModerationAction.Relabel)
-            .OrderByDescending(a => a.At).ThenByDescending(a => a.Id)
-            .Select(a => new { a.FromLabel, a.FromScore })
-            .FirstOrDefaultAsync(ct);
+        var last = await LatestRelabelAsync(postId, ct);
         var original = Enum.TryParse<Sentiment>(last?.FromLabel, ignoreCase: true, out var parsed) ? parsed : (Sentiment?)null;
         string? corrected = null;
 

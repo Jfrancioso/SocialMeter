@@ -29,7 +29,15 @@ public class ClientAddressTests
 
     [Fact]
     public void Ipv6_cloudflare_edges_are_recognised()
-        => Assert.Equal("2001:db8::5", ClientAddress.For(Request("2606:4700::1", "2001:db8::5")));
+        => Assert.Equal("2001:db8::/64", ClientAddress.For(Request("2606:4700::1", "2001:db8::5")));
+
+    [Fact]
+    public void An_ipv6_visitor_is_one_key_for_their_whole_64()
+    {
+        // A home or phone line can use any address in its /64, so per-visitor limits must count the /64 once.
+        Assert.Equal(ClientAddress.For(Request("2606:4700::1", "2001:db8:1:2:aaaa::1")), ClientAddress.For(Request("2606:4700::1", "2001:db8:1:2:ffff:1:2:3")));
+        Assert.NotEqual(ClientAddress.For(Request("2606:4700::1", "2001:db8:1:2::1")), ClientAddress.For(Request("2606:4700::1", "2001:db8:1:3::1")));
+    }
 
     [Fact]
     public void Ipv4_mapped_addresses_are_normalised()

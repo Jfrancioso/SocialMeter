@@ -46,6 +46,13 @@ public sealed class RequireAdminAttribute : Attribute, IAsyncAuthorizationFilter
                 var email = result.Principal?.FindFirst(CloudflareAccess.EmailClaim)?.Value;
                 if (AdminKey.IsAdminEmail(email, admin))
                 {
+                    if (!IsFromOwnSite(http.Request.Method, http.Request.Headers.Origin.FirstOrDefault(),
+                            SocialMeter.Web.DependencyInjection.AllowedOrigins(http.RequestServices.GetRequiredService<IConfiguration>())))
+                    {
+                        Log(http).LogWarning("Admin: a signed-in change from another site was refused");
+                        context.Result = new ObjectResult(new ProblemDetails { Status = 403, Title = "Cross-site request refused" }) { StatusCode = 403 };
+                        return;
+                    }
                     http.Items[ActorItem] = email!;
                     return;
                 }
@@ -62,6 +69,17 @@ public sealed class RequireAdminAttribute : Attribute, IAsyncAuthorizationFilter
 
         context.Result = new UnauthorizedObjectResult(new ProblemDetails { Status = 401, Title = "Sign in required" });
     }
+
+    /// <summary>
+    /// A change (any method but GET, HEAD or OPTIONS) made with the browser's sign-in must come from the site itself. The
+    /// sign-in is Cloudflare's cookie, which a page on another site can make the browser send with a plain form post (a
+    /// POST without a body needs no CORS preflight); the browser always names the page's site in Origin. Reads are safe:
+    /// CORS stops another site from seeing the answer. Scripts using the admin key never reach this check.
+    /// </summary>
+    public static bool IsFromOwnSite(string method, string? origin, IEnumerable<string> allowedOrigins) =>
+        HttpMethods.IsGet(method) || HttpMethods.IsHead(method) || HttpMethods.IsOptions(method)
+        || (!string.IsNullOrEmpty(origin)
+            && allowedOrigins.Any(o => string.Equals(o.TrimEnd('/'), origin.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)));
 
     private static ILogger Log(HttpContext http) =>
         http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger<RequireAdminAttribute>();
