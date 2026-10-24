@@ -43,6 +43,7 @@ Grouped by folder under `Application/`. `Social/` is the core:
 | `SocialMeterService` | The reading for one title: decide whether a pull is due (tracked, stale or forced, inside budget), run it under the per-title gate, compute, persist snapshot and history. |
 | `PostIngestionService` | Fetch one source for one title, upsert, assess what the current assessor has not read, apply trust. Knows nothing about scores. |
 | `ScoreExplainer` | The numbers behind a cached reading: weight shares, substance mix, drivers, filter reasons, notes. Read-only. |
+| `CrowdShapeService` / `CrowdShapeRules` | "The crowd" (pilot, behind `CrowdShape:Titles`): each counted post as a dot and the crowd's shape (split, loved, panned, mixed, leaning, early). Rules pure and tested; outside the pilot it answers without a database read. |
 | `TitleHighlights` / `HighlightRules` | "In their words": the featured post on each side. The rules (which side qualifies, which post, what is quotable) are pure and tested; the service loads data in two passes. Read-only. |
 | `PostQueryService` | Posts page, cached snapshots for many titles, daily history + trend. Read-only. |
 | `RescoreService` | Operator: re-read stored posts with the current assessor, title by title. One run at a time. |

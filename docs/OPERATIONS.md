@@ -156,6 +156,35 @@ reason. The post leaves the score and the feed at once; the card shows "Post rem
 features the next post. If a word keeps getting through, add it to `BlockedWords` (or `BlockedRoots` for a word that hides
 inside longer words) with a test case in `HighlightTests.cs`.
 
+## The Crowd Shape pilot ("The crowd" on one title page)
+
+Since 2026-10-24 one title page (Other Mommy, `movie_1400837`) shows "The crowd": every counted post as a dot, placed
+from "hated it" to "loved it", sized by its weight in the score and marked with its platform; clicking a dot opens that
+post. Every other title page is unchanged. Code: `Application/Social/CrowdShape.cs` (shape rules + service),
+`CrowdShapeOptions`, UI `components/Title/CrowdShape.vue` and `utils/crowdLayout.js`.
+
+Turn it off (no deploy; the setting change restarts the app, about 30 seconds):
+
+```bash
+az webapp config appsettings set -g socialmeter-jf-rg -n socialmeter-jf-api --settings CrowdShape__Enabled=false
+```
+
+Move it to another title, or add one (`__1`, `__2`, ...):
+
+```bash
+az webapp config appsettings set -g socialmeter-jf-rg -n socialmeter-jf-api --settings CrowdShape__Titles__0=tv_124364
+```
+
+Is anyone using it? Each dot click is one request to the single-post endpoint, which nothing else calls:
+
+```kusto
+AppRequests
+| where TimeGenerated > ago(7d) and Name == "GET api/socialmeter/{type}/{id:int}/posts/{postId:int}"
+| summarize clicks = sum(ItemCount) by bin(TimeGenerated, 1d)
+```
+
+Remove it for good: revert the two pilot commits (API e59bdd6, UI abc3ccc); nothing else depends on them.
+
 ## Useful queries
 
 Azure portal > `socialmeter-jf-logs` (or `socialmeter-jf-ai`) > **Logs**.
