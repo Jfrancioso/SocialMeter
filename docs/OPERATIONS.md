@@ -238,6 +238,37 @@ AppRequests
 Remove it for good: delete the "The crowd" section from `TitlePage.vue` (the component then goes unused) and the
 `crowd` endpoint; `MostTalkedAbout` stays, since the home page uses it.
 
+## The Outbox (the brand's Bluesky posts)
+
+The site drafts posts for the brand's Bluesky account; an admin posts or skips each one on the admin page. **Nothing is
+ever posted without that tap** (two taps, so a stray one on a phone can't publish). X is by hand: "Copy for X".
+
+What a post is: facts only, then the link (with the title page's preview card), and two replies quoting the strongest
+Bluesky post on each side, "The case for:" and "The case against:" (picked by the "In their words" rules: established
+author, no spoilers, no crude wording, words only; only Bluesky posts can be quoted on Bluesky). A quote whose author
+has turned off quoting is left out. Quoted authors get a notification, so read both quotes before posting: the sides
+come from Claude's labels, which can miss sarcasm. If a quote is misread, Skip, and relabel that post on its title page
+so it isn't picked again.
+
+When: one draft a day at `Posting:DraftHourUtc` (14 = 10 am Eastern): movies and shows only (games' Steam reviews
+would always win, as for the home hero), preferring a title with a quotable post on both sides, then a split crowd,
+never one drafted in the last `RepeatAfterDays` (7, skipped ones included). Plus one per live event (an open watch
+window). "Draft one now" on the admin page makes today's draft straight away. Drafts expire after `ExpireAfterHours`
+(36). At most `MaxPerDay` (2) posts a day. Drafting reads stored data only; it never pulls from the sources. The numbers
+are filled in when a draft is shown and again when it's posted, so they're current. Code: `Application/Outbox`,
+`Infrastructure/Bluesky/BlueskyPoster.cs` (the brand account's own session), `Controllers/OutboxController.cs`, UI
+`components/Admin/OutboxPanel.vue`.
+
+Setting up the brand account (once): in Bluesky, Settings → Privacy and security → App passwords → Add. Then in the API's
+App Service settings (never in the repo):
+
+```bash
+az webapp config appsettings set -g socialmeter-jf-rg -n socialmeter-jf-api --settings Posting__Bluesky__Identifier=<handle> Posting__Bluesky__AppPassword=<app password>
+```
+
+Turn it all off (no drafts, Post refused): `Posting__Enabled=false`. Revoke the app password in Bluesky to cut the site
+off from the account entirely.
+
 ## The reading shelf (/shelf, private)
 
 A private page of ten hand-picked spicy romance and romantasy series (`Application/Shelf/ReadingShelf.cs`): each

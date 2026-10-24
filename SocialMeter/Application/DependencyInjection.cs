@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.Configure<HomeOptions>(configuration.GetSection(HomeOptions.SectionName));
         services.Configure<SearchOptions>(configuration.GetSection(SearchOptions.SectionName));
         services.Configure<CrowdShapeOptions>(configuration.GetSection(CrowdShapeOptions.SectionName));
+        services.Configure<PostingOptions>(configuration.GetSection(PostingOptions.SectionName));
         services.TryAddSingleton(TimeProvider.System);
 
         // Use cases, one class each.
@@ -38,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<PostIngestionService>();
         services.AddScoped<ScoreHistoryService>();
         services.AddScoped<DeletionSyncService>();
+        services.AddScoped<Outbox.OutboxService>();
         services.AddScoped<TitleRecomputer>();
         services.AddScoped<ModerationService>();
         services.AddScoped<OutboundClicks>();
@@ -68,6 +70,7 @@ public static class DependencyInjection
         services.AddHostedService<UsageMeterWorker>();
         services.AddHostedService<WatchWindowWorker>();
         services.AddHostedService<HomeWarmupWorker>();
+        services.AddHostedService<Outbox.OutboxWorker>();   // drafts only; posting is always an admin's tap
 
         return services;
     }

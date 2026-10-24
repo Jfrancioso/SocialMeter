@@ -17,7 +17,7 @@ public sealed class BlueskySession
     private static readonly TimeSpan RefreshAfter = TimeSpan.FromMinutes(60);
 
     private readonly IHttpClientFactory _http;
-    private readonly BlueskyOptions _options;
+    private readonly BlueskyAccount _account;
     private readonly ILogger<BlueskySession> _logger;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
@@ -25,12 +25,22 @@ public sealed class BlueskySession
     private string? _refresh;
     private DateTime _obtainedAt;
 
+    /// <summary>The reading account (Bluesky:Identifier), as registered for the whole app.</summary>
     public BlueskySession(IHttpClientFactory http, IOptions<BlueskyOptions> options, ILogger<BlueskySession> logger)
+        : this(http, new BlueskyAccount(options.Value.ServiceUrl, options.Value.Identifier, options.Value.AppPassword), logger)
+    {
+    }
+
+    /// <summary>Any account: the brand's posting account has its own session (see BlueskyPoster).</summary>
+    public BlueskySession(IHttpClientFactory http, BlueskyAccount account, ILogger<BlueskySession> logger)
     {
         _http = http;
-        _options = options.Value;
+        _account = account;
         _logger = logger;
     }
+
+    /// <summary>The signed-in account's id (did:plc:...), known after the first sign-in; posts are written to this repo.</summary>
+    public string? Did { get; private set; }
 
     /// <summary>A valid access token, refreshing or signing in only when needed.</summary>
     public async Task<string> GetAccessTokenAsync(CancellationToken ct)
@@ -75,7 +85,7 @@ public sealed class BlueskySession
     private async Task SignInAsync(CancellationToken ct)
     {
         using var res = await Client().PostAsJsonAsync(Url("com.atproto.server.createSession"),
-            new { identifier = _options.Identifier, password = _options.AppPassword }, ct);
+            new { identifier = _account.Identifier, password = _account.AppPassword }, ct);
         if (!res.IsSuccessStatusCode)
         {
             // The body names the error ("AuthenticationRequired", "RateLimitExceeded"); it never echoes the password.
@@ -84,13 +94,14 @@ public sealed class BlueskySession
         }
 
         Store(await res.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct));
-        _logger.LogInformation("Bluesky: signed in as {Handle}", _options.Identifier);
+        _logger.LogInformation("Bluesky: signed in as {Handle}", _account.Identifier);
     }
 
     private void Store(JsonElement session)
     {
         _access = session.GetProperty("accessJwt").GetString();
         _refresh = session.GetProperty("refreshJwt").GetString();
+        if (session.TryGetProperty("did", out var did)) Did = did.GetString();
         _obtainedAt = DateTime.UtcNow;
     }
 
@@ -101,5 +112,8 @@ public sealed class BlueskySession
         return client;
     }
 
-    private string Url(string method) => $"{_options.ServiceUrl.TrimEnd('/')}/xrpc/{method}";
+    private string Url(string method) => $"{_account.ServiceUrl.TrimEnd('/')}/xrpc/{method}";
 }
+
+/// <summary>A Bluesky account the app signs in as: its server, handle and an app password (never the account password).</summary>
+public sealed record BlueskyAccount(string ServiceUrl, string Identifier, string AppPassword);

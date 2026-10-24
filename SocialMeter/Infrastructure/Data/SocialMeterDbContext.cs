@@ -17,6 +17,7 @@ public class SocialMeterDbContext : DbContext
     public DbSet<ScoreHistory> ScoreHistory => Set<ScoreHistory>();
     public DbSet<RefreshLog> RefreshLogs => Set<RefreshLog>();
     public DbSet<ModerationAction> ModerationActions => Set<ModerationAction>();
+    public DbSet<OutboxItem> OutboxItems => Set<OutboxItem>();
     public DbSet<OutboundClickDay> OutboundClicks => Set<OutboundClickDay>();
     public DbSet<UsageDay> UsageDays => Set<UsageDay>();
 
@@ -90,6 +91,20 @@ public class SocialMeterDbContext : DbContext
             entity.Property(e => e.Note).HasMaxLength(300);
             entity.HasIndex(e => e.At).HasDatabaseName("IX_ModerationActions_At");
             entity.HasIndex(e => e.PostId).HasDatabaseName("IX_ModerationActions_PostId");
+        });
+
+        modelBuilder.Entity<OutboxItem>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Kind).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.MediaType).HasConversion<string>().HasMaxLength(10).IsRequired();
+            entity.Property(e => e.TitleName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.DecidedBy).HasMaxLength(200);
+            entity.Property(e => e.PostedText).HasMaxLength(1000);
+            entity.Property(e => e.PostedUri).HasMaxLength(300);
+            entity.Property(e => e.Error).HasMaxLength(300);
+            entity.HasIndex(e => e.CreatedAt).HasDatabaseName("IX_OutboxItems_CreatedAt");
         });
 
         modelBuilder.Entity<UsageDay>(entity =>

@@ -101,4 +101,6 @@ Change the prompt, run the eval, read the report — that is the loop. Add a cas
 | `POST /api/events/outbound?kind=&host=` | Count one click on a link that leaves the site (a daily total, nothing about the visitor) |
 | `GET /api/admin/me`, `GET /api/admin/guardrails`, `GET /api/admin/moderation` | Admin page: who is signed in, health and spend, the moderation log |
 | `POST /api/admin/posts/{id}/hide`, `.../restore` | Remove a post from the feed and the score, or put it back |
+| `GET /api/admin/outbox`, `POST .../draft`, `POST .../{id}/post`, `.../skip` | The Outbox: the brand's drafted Bluesky posts; nothing posts without an admin's tap |
+| `GET /api/admin/shelf`, `.../covers/{id}`, `.../sign-in` | The private reading shelf (admins and `Shelf:Readers`, read-only) |
 | `POST /api/operator/sync-deletions`, `rescore`, `tracked/refresh` | Operator actions (admin key) |

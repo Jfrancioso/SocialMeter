@@ -69,6 +69,7 @@ public static class DependencyInjection
         services.AddHttpClient<BlueskySource>();
         services.AddHttpClient(BlueskySession.HttpClientName);
         services.AddSingleton<BlueskySession>(); // one signed-in session per process; Bluesky caps sign-ins
+        services.AddSingleton<IBlueskyPoster, BlueskyPoster>(); // the brand account, its own session (Posting:Bluesky)
 
         // Reddit: the official API in every environment. In Development only, ArcticShift:Enabled swaps in the archive for
         // local evaluation while the official application is pending; it can never be switched on in production.
