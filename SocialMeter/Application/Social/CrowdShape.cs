@@ -42,6 +42,46 @@ public static class CrowdShapeRules
         return positive >= negative ? LeaningPositive : LeaningNegative;
     }
 
+    // ---- The crowd over time ----
+
+    /// <summary>The timeline covers posts of the last this many hours, at most TimelineMaxPosts of them (the latest).</summary>
+    public const int TimelineHours = 48, TimelineMaxPosts = 300;
+
+    /// <summary>Each moment is the mood of the latest TimelineWindow posts; the line starts at the TimelineStart-th post.</summary>
+    public const int TimelineWindow = 12, TimelineStart = 3;
+
+    /// <summary>Fewer recent posts than this draw no line.</summary>
+    public const int TimelineMinPosts = 10;
+
+    public sealed record TimelinePost(DateTime At, double Value, double Weight, string Sentiment, string Platform);
+
+    /// <summary>
+    /// The crowd over time: one moment per post, in the order they were posted, at the mood of the latest
+    /// <see cref="TimelineWindow"/> posts up to and including it (weighted as the score weighs them, on the 0-100 scale).
+    /// It moves with each post, so it bounces like a stock chart; the score itself is steadier, as it takes every post
+    /// and is pulled toward 50 when there are few. The line starts at the <see cref="TimelineStart"/>-th post, so its
+    /// first point isn't one post's opinion.
+    /// </summary>
+    public static IReadOnlyList<CrowdMomentDto> Timeline(IReadOnlyList<TimelinePost> posts)
+    {
+        if (posts.Count < TimelineMinPosts) return Array.Empty<CrowdMomentDto>();
+
+        var ordered = posts.OrderBy(p => p.At).ToList();
+        var moments = new List<CrowdMomentDto>(ordered.Count);
+        for (var i = TimelineStart - 1; i < ordered.Count; i++)
+        {
+            double weight = 0, sum = 0;
+            for (var j = Math.Max(0, i - TimelineWindow + 1); j <= i; j++)
+            {
+                weight += ordered[j].Weight;
+                sum += ordered[j].Weight * ordered[j].Value;
+            }
+            var mood = weight > 0 ? (int)Math.Round((sum / weight + 1) * 50) : 50;
+            moments.Add(new CrowdMomentDto { At = ordered[i].At, Mood = Math.Clamp(mood, 0, 100), Sentiment = ordered[i].Sentiment, Platform = ordered[i].Platform });
+        }
+        return moments;
+    }
+
     /// <summary>Who gets "The crowd": a listed title or a live event always; a most-talked-about title once it has enough posts.</summary>
     public static bool Shows(bool listed, bool liveEvent, bool talkedAbout, int posts, int minPosts) =>
         listed || liveEvent || (talkedAbout && posts >= minPosts);
@@ -112,7 +152,8 @@ public sealed class CrowdShapeService : ICrowdShape
 
         var key = $"{mediaType.ToString().ToLowerInvariant()}_{tmdbId}";
         var listed = _options.IsListed(key);
-        var live = _watch.OpenFor(mediaType, tmdbId) is not null;
+        var window = _watch.OpenFor(mediaType, tmdbId);
+        var live = window is not null;
         var talkedAbout = !listed && !live && _options.TopTalkedAbout > 0
             && (await _talkedAbout.GetAsync(ct)).Take(_options.TopTalkedAbout).Any(t => t.MediaType == mediaType && t.TmdbId == tmdbId);
         if (!listed && !live && !talkedAbout) return Off;
@@ -129,7 +170,9 @@ public sealed class CrowdShapeService : ICrowdShape
             return BuildAsync(mediaType, tmdbId, ct);
         });
 
-        return crowd is not null && CrowdShapeRules.Shows(listed, live, talkedAbout, crowd.Posts, _options.MinPosts) ? crowd : Off;
+        if (crowd is null || !CrowdShapeRules.Shows(listed, live, talkedAbout, crowd.Posts, _options.MinPosts)) return Off;
+        // Whether it's live changes by the minute, not by the reading, so it's added to the cached crowd per request.
+        return live ? crowd with { Live = true, LiveLabel = WatchWindows.ReasonFor(window!) } : crowd;
     }
 
     private async Task<CrowdShapeDto> BuildAsync(MediaType mediaType, int tmdbId, CancellationToken ct)
@@ -165,6 +208,16 @@ public sealed class CrowdShapeService : ICrowdShape
             .SelectMany(g => g.OrderByDescending(p => weights[p.Id]).Take(perSide[g.Key]))
             .OrderByDescending(p => weights[p.Id]);
 
+        // The crowd over time: the latest posts of the last TimelineHours, as they were posted.
+        var since = now.AddHours(-CrowdShapeRules.TimelineHours);
+        var timeline = CrowdShapeRules.Timeline(posts
+            .Where(p => p.CreatedAt >= since)
+            .OrderByDescending(p => p.CreatedAt)
+            .Take(CrowdShapeRules.TimelineMaxPosts)
+            .Select(p => new CrowdShapeRules.TimelinePost(p.CreatedAt, SocialScoreCalculator.Value(p), weights[p.Id],
+                p.Sentiment.ToString().ToLowerInvariant(), p.Platform))
+            .ToList());
+
         return new CrowdShapeDto
         {
             Enabled = true,
@@ -183,7 +236,9 @@ public sealed class CrowdShapeService : ICrowdShape
                     Value = Math.Round(SocialScoreCalculator.Value(p), 3),
                     Share = total > 0 ? Math.Round(100 * weights[p.Id] / total, 2) : 0
                 })
-                .ToList()
+                .ToList(),
+            Timeline = timeline,
+            TimelineHours = CrowdShapeRules.TimelineHours
         };
     }
 }

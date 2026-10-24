@@ -180,6 +180,70 @@ public class CrowdShapeTests
 
         Assert.True(result.Enabled);
         Assert.Equal(CrowdShapeRules.Early, result.Shape);   // five posts: shown, but too few to call
+        Assert.True(result.Live);
+        Assert.Equal("Watch party tonight", result.LiveLabel);
+    }
+
+    // ---- the crowd over time ----
+
+    private static CrowdShapeRules.TimelinePost Moment(int minute, double value, double weight = 1) =>
+        new(new DateTime(2026, 10, 24, 1, 0, 0, DateTimeKind.Utc).AddMinutes(minute), value, weight, value >= 0 ? "positive" : "negative", "x");
+
+    [Fact]
+    public void Too_few_recent_posts_draw_no_line()
+    {
+        var posts = Enumerable.Range(0, CrowdShapeRules.TimelineMinPosts - 1).Select(i => Moment(i, 0.9)).ToList();
+
+        Assert.Empty(CrowdShapeRules.Timeline(posts));
+    }
+
+    [Fact]
+    public void The_line_follows_the_latest_posts_in_the_order_they_were_posted()
+    {
+        // Twelve loved-it posts, then twelve hated-it ones, handed over out of order.
+        var posts = Enumerable.Range(0, 12).Select(i => Moment(i, 0.9))
+            .Concat(Enumerable.Range(12, 12).Select(i => Moment(i, -0.8)))
+            .Reverse()
+            .ToList();
+
+        var line = CrowdShapeRules.Timeline(posts);
+
+        Assert.Equal(24 - (CrowdShapeRules.TimelineStart - 1), line.Count);   // starts at the third post
+        Assert.True(line.Zip(line.Skip(1)).All(p => p.First.At < p.Second.At));
+        Assert.Equal(95, line[0].Mood);       // all loved it: (0.9 + 1) x 50
+        Assert.Equal(10, line[^1].Mood);      // the window has moved past every loved-it post: (-0.8 + 1) x 50
+        Assert.Equal("negative", line[^1].Sentiment);
+        Assert.True(line[12].Mood < line[8].Mood);   // turning as the hated-it posts come in
+    }
+
+    [Fact]
+    public void Heavier_posts_pull_the_line_harder()
+    {
+        var posts = Enumerable.Range(0, 11).Select(i => Moment(i, -1)).Append(Moment(11, 1, weight: 11)).ToList();
+
+        Assert.Equal(50, CrowdShapeRules.Timeline(posts)[^1].Mood);   // one post weighing as much as the other eleven
+    }
+
+    [Fact]
+    public async Task The_crowd_carries_a_line_of_the_last_two_days_only()
+    {
+        var db = Db();
+        await AddTitleAsync(db, 1, 8, 4);   // posted a day ago
+        for (var i = 0; i < 5; i++)
+        {
+            var old = Post(1, Sentiment.Positive, 0.8);
+            old.CreatedAt = DateTime.UtcNow.AddDays(-5);
+            db.SocialPosts.Add(old);
+        }
+        await db.SaveChangesAsync();
+
+        var result = await Service(db, new CrowdShapeOptions { Titles = { "movie_1" }, TopTalkedAbout = 0 }).GetAsync(MediaType.Movie, 1);
+
+        Assert.Equal(17, result.Posts);
+        Assert.Equal(12 - (CrowdShapeRules.TimelineStart - 1), result.Timeline.Count);
+        Assert.Equal(CrowdShapeRules.TimelineHours, result.TimelineHours);
+        Assert.False(result.Live);
+        Assert.Null(result.LiveLabel);
     }
 
     [Fact]
