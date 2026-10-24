@@ -178,9 +178,12 @@ inside longer words) with a test case in `HighlightTests.cs`.
 
 ## "The crowd" (Crowd Shape)
 
-Since 2026-10-24 some title pages show "The crowd": every counted post as a dot, placed from "hated it" to "loved it",
-sized by its weight in the score and marked with its platform; clicking a dot opens that post. The first time the strip
-scrolls into view the dots drop into place (once; skipped for visitors who turn on reduced motion).
+Since 2026-10-24 some title pages show "The crowd": every counted post as a dot in one of three zones, Hated it |
+Mixed | Loved it, each as wide as its share of the score's weight (stronger opinions further out inside a zone), sized
+by its weight in the score and marked with its platform, with the score as a line across. Clicking a dot opens that
+post: under the strip on a wide screen, in a sheet from the bottom on a phone. The first time the strip scrolls into
+view the dots drop into place (once; skipped for visitors who turn on reduced motion). The layout's rules are tested in
+the UI repo (`npm test`, `src/utils/crowdLayout.test.js`, also run by CI).
 
 Which titles get it (`CrowdShapeService`, settings under `CrowdShape`):
 
