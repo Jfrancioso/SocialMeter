@@ -10,7 +10,10 @@ using Xunit;
 
 namespace SocialMeter.Tests;
 
-/// <summary>"The crowd": the shape rules, which titles show it, the per-reading cache, and reading a clicked dot's post.</summary>
+/// <summary>
+/// "The crowd": the shape rules, which titles show it, the per-reading cache, and the post queries around it (a clicked
+/// dot's post, the post list's order).
+/// </summary>
 public class CrowdShapeTests
 {
     [Theory]
@@ -226,6 +229,28 @@ public class CrowdShapeTests
         Assert.Equal(13, result.Posts);
         Assert.Equal(3, result.Dots.Count);
         Assert.Equal("negative", result.Dots[0].Sentiment);   // the heaviest first
+    }
+
+    [Fact]
+    public async Task Posts_can_be_listed_most_liked_newest_or_oldest_first()
+    {
+        var db = Db();
+        var old = Post(1, Sentiment.Positive, 0.8, upvotes: 50);
+        old.CreatedAt = DateTime.UtcNow.AddDays(-5);
+        var mid = Post(1, Sentiment.Negative, -0.5, upvotes: 1);
+        mid.CreatedAt = DateTime.UtcNow.AddDays(-2);
+        var fresh = Post(1, Sentiment.Positive, 0.6, upvotes: 10);
+        fresh.CreatedAt = DateTime.UtcNow.AddHours(-1);
+        db.SocialPosts.AddRange(old, mid, fresh);
+        await db.SaveChangesAsync();
+        var queries = new PostQueryService(db, new ScoreHistoryService(db, new PullGate(), Microsoft.Extensions.Options.Options.Create(new SocialMeterOptions())));
+
+        async Task<int[]> Ids(Application.Abstractions.PostSort sort) =>
+            (await queries.GetPostsAsync(MediaType.Movie, 1, null, null, 1, 12, sort)).Items.Select(p => p.Id).ToArray();
+
+        Assert.Equal(new[] { old.Id, fresh.Id, mid.Id }, await Ids(Application.Abstractions.PostSort.Top));
+        Assert.Equal(new[] { fresh.Id, mid.Id, old.Id }, await Ids(Application.Abstractions.PostSort.Newest));
+        Assert.Equal(new[] { old.Id, mid.Id, fresh.Id }, await Ids(Application.Abstractions.PostSort.Oldest));
     }
 
     [Fact]

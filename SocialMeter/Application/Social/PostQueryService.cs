@@ -21,7 +21,8 @@ public sealed class PostQueryService : IPostQueries
         _history = history;
     }
 
-    public async Task<PagedResult<SocialPostDto>> GetPostsAsync(MediaType mediaType, int tmdbId, Sentiment? sentiment, string? platform, int page, int pageSize, CancellationToken ct = default)
+    public async Task<PagedResult<SocialPostDto>> GetPostsAsync(MediaType mediaType, int tmdbId, Sentiment? sentiment, string? platform, int page, int pageSize,
+        PostSort sort = PostSort.Top, CancellationToken ct = default)
     {
         // The page shows twelve at a time and loads more on request; capping both bounds what any client can harvest per title.
         page = Math.Clamp(page, 1, MaxPages);
@@ -32,9 +33,14 @@ public sealed class PostQueryService : IPostQueries
         if (!string.IsNullOrWhiteSpace(platform)) query = query.Where(p => p.Platform == platform);
 
         var total = await query.CountAsync(ct);
-        var items = await query
-            .OrderByDescending(p => p.Upvotes)
-            .ThenByDescending(p => p.CreatedAt)
+        // The id breaks ties, so a page boundary never repeats or skips a post with the same time or likes.
+        var ordered = sort switch
+        {
+            PostSort.Newest => query.OrderByDescending(p => p.CreatedAt).ThenByDescending(p => p.Id),
+            PostSort.Oldest => query.OrderBy(p => p.CreatedAt).ThenBy(p => p.Id),
+            _ => query.OrderByDescending(p => p.Upvotes).ThenByDescending(p => p.CreatedAt).ThenByDescending(p => p.Id)
+        };
+        var items = await ordered
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);

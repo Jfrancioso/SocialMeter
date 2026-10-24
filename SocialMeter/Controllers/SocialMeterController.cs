@@ -101,8 +101,9 @@ public sealed class SocialMeterController : ControllerBase
         [FromQuery] string? platform = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
+        [FromQuery] PostSort sort = PostSort.Top,
         CancellationToken ct = default)
-        => Ok(await _queries.GetPostsAsync(type, id, sentiment, platform, page, pageSize, ct));
+        => Ok(await _queries.GetPostsAsync(type, id, sentiment, platform, page, pageSize, sort, ct));
 
     /// <summary>Cached readings for many titles at once, e.g. ?keys=movie:693134,tv:1399. Never contacts the sources.</summary>
     [HttpGet("snapshots")]

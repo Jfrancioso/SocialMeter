@@ -40,10 +40,19 @@ public interface ICrowdShape
     Task<CrowdShapeDto> GetAsync(MediaType mediaType, int tmdbId, CancellationToken ct = default);
 }
 
+/// <summary>The order of a title's post list: most liked first (the default), newest first, or oldest first.</summary>
+public enum PostSort
+{
+    Top,
+    Newest,
+    Oldest
+}
+
 /// <summary>Read-only queries over stored posts, cached readings and daily history. Never contacts the sources.</summary>
 public interface IPostQueries
 {
-    Task<PagedResult<SocialPostDto>> GetPostsAsync(MediaType mediaType, int tmdbId, Sentiment? sentiment, string? platform, int page, int pageSize, CancellationToken ct = default);
+    Task<PagedResult<SocialPostDto>> GetPostsAsync(MediaType mediaType, int tmdbId, Sentiment? sentiment, string? platform, int page, int pageSize,
+        PostSort sort = PostSort.Top, CancellationToken ct = default);
 
     /// <summary>One counted post of this title (a dot clicked in "The crowd"); null when it isn't one.</summary>
     Task<SocialPostDto?> GetPostAsync(MediaType mediaType, int tmdbId, int postId, CancellationToken ct = default);
