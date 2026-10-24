@@ -32,7 +32,7 @@ Browser  GET /title/movie/1153576
        GET /api/titles/movie/1153576            (title details, TMDB)
        GET /api/titles/movie/1153576/ratings    (IMDb/RT/Metacritic via OMDb)
        GET /api/socialmeter/movie/1153576       (the reading)
-       GET /api/socialmeter/movie/1153576/explain, /history, /posts
+       GET /api/socialmeter/movie/1153576/explain, /history, /posts, /highlights
 
 API  Controllers/SocialMeterController.Get
   └─ Application/Social/SocialMeterService.GetScoreAsync
@@ -128,10 +128,16 @@ new public endpoint, and what must it never do?
 ## 5. Application use cases (`Application/Social`)
 
 Read in this order: `SocialMeterService.cs`, `PostIngestionService.cs`, `PullGate.cs`, `../Guardrails/LivePullBudget.cs`,
-`ScoreExplainer.cs`, `PostQueryService.cs`, `RescoreService.cs`, `ScoreHistoryService.cs`, `DeletionSyncService.cs`.
+`ScoreExplainer.cs`, `TitleHighlights.cs`, `PostQueryService.cs`, `RescoreService.cs`, `ScoreHistoryService.cs`,
+`DeletionSyncService.cs`.
 
 The rule: one class, one verb. `SocialMeterService` gets a reading. `PostIngestionService` gets posts in. The explainer
-explains. Queries read. Rescore re-reads. Each takes the `DbContext` and the interfaces it needs through its constructor;
+explains. Highlights pick the featured posts. Queries read. Rescore re-reads.
+
+`TitleHighlights.cs` is a good small example of the house pattern: the rules are a pure static class (`HighlightRules`,
+tested in `HighlightTests.cs` without a database) and the service around them only loads data and calls the rules. It
+also shows the two-pass read used when posts are many: numbers for every post first (no text), then full rows for the
+few that matter. Each takes the `DbContext` and the interfaces it needs through its constructor;
 nothing is `new`-ed inside.
 
 Things worth understanding deeply:

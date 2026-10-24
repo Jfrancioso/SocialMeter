@@ -93,6 +93,7 @@ Change the prompt, run the eval, read the report — that is the loop. Add a cas
 | `GET /api/socialmeter/{type}/{id}` | The SocialMeter reading (`?refresh=true` re-pulls from sources) |
 | `GET /api/socialmeter/{type}/{id}/posts` | Posts behind the score, filterable by sentiment/platform |
 | `GET /api/socialmeter/{type}/{id}/explain` | The numbers behind the reading: effective posts, 95 % margin, weight by sentiment and substance, top drivers |
+| `GET /api/socialmeter/{type}/{id}/highlights` | "In their words": the featured post on each side (rules in `HighlightRules`), with each side's post count and weight share |
 | `GET /api/socialmeter/{type}/{id}/history?days=30` | One reading per day plus the Mann-Kendall trend verdict |
 | `GET /api/socialmeter/snapshots?keys=movie:1,tv:2` | Cached readings for many titles |
 | `POST /api/events/outbound?kind=&host=` | Count one click on a link that leaves the site (a daily total, nothing about the visitor) |

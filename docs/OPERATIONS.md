@@ -142,6 +142,17 @@ The key is the type and id from the title's URL (`/title/tv/124364` gives `tv_12
 set to `true` or `false` forces the treatment either way. Defaults live in `appsettings.json` under `Search:Titles`.
 Before adding a term, try it free on Bluesky's own search (bsky.app, search box) and read the first page of results.
 
+## When a bad post is featured ("In their words")
+
+Each title page features the strongest post on each side (`HighlightRules` in `Application/Social/TitleHighlights.cs`
+has the rules; How it works explains them to readers). The rules filter out crude wording, spoiler warnings, media,
+shouting and discounted accounts, but they can't judge meaning: an off-topic or nasty post can still get through.
+
+Fix: open the title page with the admin bar's "Remove buttons" switch on, press **Remove** on the featured card and pick a
+reason. The post leaves the score and the feed at once; the card shows "Post removed" with Undo, and the next page load
+features the next post. If a word keeps getting through, add it to `BlockedWords` (or `BlockedRoots` for a word that hides
+inside longer words) with a test case in `HighlightTests.cs`.
+
 ## Useful queries
 
 Azure portal > `socialmeter-jf-logs` (or `socialmeter-jf-ai`) > **Logs**.
