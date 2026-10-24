@@ -116,7 +116,10 @@ Back on: the same with `true`, or delete the setting. In the portal: `socialmete
 ## Watch windows (reading a title during an event)
 
 For a watch party, premiere or finale: while a window is open, the title counts as tracked, shows "Tracking · {Label}"
-on its page, and is read every `EveryMinutes` (at least 15) through the same guardrails. Times are UTC.
+on its page, leads the home page (the hero, with the label and a pulsing dot), and is read every `EveryMinutes` (at
+least 15) through the same guardrails. Times are UTC. The hero switches within one home warm-up (4 minutes) of the
+window opening and goes back to the usual pick within 4 minutes of it closing; with two windows open, the one that
+started first leads. The title needs a TMDB backdrop to lead; without one the usual hero stays.
 
 ```bash
 az webapp config appsettings set -g socialmeter-jf-rg -n socialmeter-jf-api --settings \
