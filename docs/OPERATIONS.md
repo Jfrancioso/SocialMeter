@@ -199,7 +199,20 @@ Every other title page is unchanged. Code: `Application/Social/CrowdShape.cs` (r
 
 Guardrails: the title checks need no database; one snapshot row then says whether the reading changed, and the posts are
 read again only when it did (cached per reading for 30 minutes), so a busy title costs one small query per view. At most
-`MaxDots` = 200 posts are drawn (the heaviest; phones draw 100); the shares and the shape always use every counted post.
+`MaxDots` = 200 posts are drawn (each side's heaviest, as many as its share; phones draw 100); the shares and the shape
+always use every counted post.
+
+### The live line
+
+Above the dots, once a title has at least 10 counted posts from the last 48 hours: a line of the mood of the latest 12
+posts (0 hated it, 100 loved it), one step per post in the order they were posted, like a trading tick chart, with the
+score as a dashed line and a tick per post underneath (`CrowdShapeRules.Timeline`, the newest 300 posts at most; it
+comes with the crowd, so no extra endpoint or cache). During a live event (an open watch window) it says LIVE with the
+window's label, pings on the latest post, and the page asks for the crowd again every 2 minutes while the tab is in view
+(`useTitlePage`). That check never pulls from the sources: an unchanged reading costs the one snapshot query, and only a
+new reading redraws the page and fetches the score again. New posts arrive as often as the sources are read: every
+`Watch:Windows` interval (30 minutes for Buddy), or when someone presses Refresh. UI: `components/Title/PulseLine.vue`,
+`utils/pulseLine.js` (tested), `composables/useElementWidth.js`.
 
 Turn it off everywhere (no deploy; the setting change restarts the app, about 30 seconds):
 
