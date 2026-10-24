@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using SocialMeter.Application.Guardrails;
 using SocialMeter.Application.Moderation;
 using SocialMeter.Contracts.Admin;
+using SocialMeter.Domain.Models;
 using SocialMeter.Web.Filters;
 
 namespace SocialMeter.Controllers;
@@ -77,6 +78,26 @@ public sealed class AdminController : ControllerBase
     public async Task<ActionResult<ModerationResultDto>> Restore(int id, CancellationToken ct)
     {
         var result = await _moderation.RestoreAsync(id, Actor, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpPost("posts/{id:int}/relabel")]
+    public async Task<ActionResult<ModerationResultDto>> Relabel(int id, [FromBody] RelabelPostRequest request, CancellationToken ct)
+    {
+        if (!Enum.TryParse<Sentiment>(request.Sentiment, ignoreCase: true, out var label) || !Enum.IsDefined(label))
+            return BadRequest(new ProblemDetails { Status = 400, Title = "Sentiment must be positive, neutral or negative" });
+        var note = PostModeration.CleanNote(request.Note);
+        if (note is null)
+            return BadRequest(new ProblemDetails { Status = 400, Title = $"Say why, in at least {PostModeration.MinNoteLength} characters" });
+
+        var result = await _moderation.RelabelAsync(id, label, note, request.TitleName, Actor, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpPost("posts/{id:int}/relabel/undo")]
+    public async Task<ActionResult<ModerationResultDto>> UndoRelabel(int id, CancellationToken ct)
+    {
+        var result = await _moderation.UndoRelabelAsync(id, Actor, ct);
         return result is null ? NotFound() : Ok(result);
     }
 

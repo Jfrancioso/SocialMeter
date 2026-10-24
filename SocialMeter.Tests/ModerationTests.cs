@@ -160,5 +160,97 @@ public class ModerationTests
         var (sut, _) = Service();
         Assert.Null(await sut.HideAsync(12345, "spam", null, "admin key"));
         Assert.Null(await sut.RestoreAsync(12345, "admin key"));
+        Assert.Null(await sut.RelabelAsync(12345, Sentiment.Neutral, "not about this movie", null, "admin key"));
+        Assert.Null(await sut.UndoRelabelAsync(12345, "admin key"));
+    }
+
+    // ---- Relabelling: the rules ----
+
+    [Fact]
+    public void Relabelling_keeps_the_tone_strength_on_the_new_side_and_fixes_the_label()
+    {
+        var post = P(-0.6);
+        Assert.True(PostModeration.Relabel(post, Sentiment.Positive, Now));
+        Assert.Equal(Sentiment.Positive, post.Sentiment);
+        Assert.Equal(0.6, post.SentimentScore, 6);
+        Assert.Equal(Now, post.LabelFixedAt);
+
+        Assert.False(PostModeration.Relabel(post, Sentiment.Positive, Now));   // already fixed as positive: nothing changes
+
+        Assert.True(PostModeration.Relabel(post, Sentiment.Neutral, Now));
+        Assert.Equal(0, post.SentimentScore);                                 // neutral has no tone
+
+        var flat = P(0.05);                                                    // read as neutral, no strength to keep
+        PostModeration.Relabel(flat, Sentiment.Negative, Now);
+        Assert.Equal(-0.5, flat.SentimentScore, 6);
+    }
+
+    [Fact]
+    public void A_fixed_label_survives_a_re_read_until_it_is_undone()
+    {
+        var post = P(-0.6);
+        PostModeration.Relabel(post, Sentiment.Positive, Now);
+
+        PostModeration.WriteAssessedLabel(post, Sentiment.Negative, -0.7);    // the assessor reads it again, wrong again
+        Assert.Equal(Sentiment.Positive, post.Sentiment);
+
+        Assert.True(PostModeration.UndoRelabel(post, Sentiment.Negative, -0.6));
+        Assert.Null(post.LabelFixedAt);
+        Assert.Equal(Sentiment.Negative, post.Sentiment);
+        PostModeration.WriteAssessedLabel(post, Sentiment.Neutral, 0.05);     // after the undo, re-reads count again
+        Assert.Equal(Sentiment.Neutral, post.Sentiment);
+        Assert.False(PostModeration.UndoRelabel(post, Sentiment.Negative, -0.6));
+    }
+
+    [Fact]
+    public void A_relabel_needs_a_real_reason_and_keeps_a_sensible_length()
+    {
+        Assert.Null(PostModeration.CleanNote(null));
+        Assert.Null(PostModeration.CleanNote("  ok "));
+        Assert.Equal("quotes a clip about another movie", PostModeration.CleanNote("  quotes a clip about another movie "));
+        Assert.Equal(PostModeration.MaxNoteLength, PostModeration.CleanNote(new string('a', 500))!.Length);
+    }
+
+    // ---- Relabelling: the service ----
+
+    [Fact]
+    public async Task Relabelling_rescores_the_title_and_logs_what_the_assessor_said()
+    {
+        var (sut, db) = Service();
+        var posts = await SeedAsync(db);
+        var before = (await db.TitleSnapshots.SingleAsync()).Score;
+        var troll = posts.Last();   // read as negative (-0.9)
+
+        var result = await sut.RelabelAsync(troll.Id, Sentiment.Positive, "sarcasm: it's praise", "Test Movie", "joey@example.com");
+
+        Assert.True(result!.Changed && result.LabelFixed);
+        Assert.Equal("positive", result.Sentiment);
+        Assert.True(result.Score > before, $"turning the one negative post positive should lift {before}, got {result.Score}");
+
+        var log = Assert.Single(await sut.RecentAsync(10));
+        Assert.Equal(("relabel", "negative", "positive", "sarcasm: it's praise"), (log.Action, log.FromLabel, log.ToLabel, log.Note));
+        Assert.True(log.CurrentlyRelabeled);
+        Assert.Equal(-0.9, (await db.ModerationActions.SingleAsync()).FromScore!.Value, 6);
+    }
+
+    [Fact]
+    public async Task Undoing_a_relabel_brings_back_the_assessors_label_and_score()
+    {
+        var (sut, db) = Service();
+        var posts = await SeedAsync(db);
+        var before = (await db.TitleSnapshots.SingleAsync()).Score;
+        var troll = posts.Last();
+
+        await sut.RelabelAsync(troll.Id, Sentiment.Positive, "sarcasm: it's praise", "Test Movie", "joey@example.com");
+        var undone = await sut.UndoRelabelAsync(troll.Id, "joey@example.com");
+
+        Assert.True(undone!.Changed);
+        Assert.False(undone.LabelFixed);
+        Assert.Equal("negative", undone.Sentiment);
+        Assert.Equal(before, undone.Score);
+        var log = await sut.RecentAsync(10);
+        Assert.Equal(new[] { "undo-relabel", "relabel" }, log.Select(l => l.Action));
+        Assert.Equal(("positive", "negative"), (log[0].FromLabel, log[0].ToLabel));
+        Assert.False((await sut.UndoRelabelAsync(troll.Id, "joey@example.com"))!.Changed);   // nothing left to undo
     }
 }

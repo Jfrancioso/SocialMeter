@@ -82,9 +82,12 @@ public class SocialMeterDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.MediaType).HasConversion<string>().HasMaxLength(10).IsRequired();
             entity.Property(e => e.TitleName).IsRequired().HasMaxLength(200);
-            entity.Property(e => e.Action).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.Action).IsRequired().HasMaxLength(20);
             entity.Property(e => e.Reason).HasMaxLength(20);
             entity.Property(e => e.Actor).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.FromLabel).HasMaxLength(10);
+            entity.Property(e => e.ToLabel).HasMaxLength(10);
+            entity.Property(e => e.Note).HasMaxLength(300);
             entity.HasIndex(e => e.At).HasDatabaseName("IX_ModerationActions_At");
             entity.HasIndex(e => e.PostId).HasDatabaseName("IX_ModerationActions_PostId");
         });

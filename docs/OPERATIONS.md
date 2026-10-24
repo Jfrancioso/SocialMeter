@@ -145,6 +145,26 @@ The key is the type and id from the title's URL (`/title/tv/124364` gives `tv_12
 set to `true` or `false` forces the treatment either way. Defaults live in `appsettings.json` under `Search:Titles`.
 Before adding a term, try it free on Bluesky's own search (bsky.app, search box) and read the first page of results.
 
+## Correcting how a post was read (relabel)
+
+With the admin bar's "Remove buttons" switch on, every post card has **Relabel** beside Remove: pick positive, neutral or
+negative and say why ("sarcasm, it's praise", "quotes a clip about another movie"). The title is rescored at once, the
+card shows the new label and a public "corrected" tag, and the label outlasts later re-reads by Claude
+(`PostModeration.WriteAssessedLabel` is the only way an assessed label reaches a post). Undo is on the card and in the
+command center's log.
+
+Every relabel keeps what Claude said (label and tone), what it became, and the reason, in `ModerationActions` (no copy
+of the post's text, so "deleted there, deleted here" still holds). That is the record of Claude's mistakes: the source of
+worked examples for its instructions and of cases for its accuracy test (`ClaudeAssessorEval`). Claude is not retrained
+on it. To pull the corrections with their posts (SSMS, after opening the database as in DEPLOY.md):
+
+```sql
+SELECT a.At, p.Platform, p.Content, a.FromLabel, a.FromScore, a.ToLabel, a.Note, p.AnalyzerNote
+FROM ModerationActions a JOIN SocialPosts p ON p.Id = a.PostId
+WHERE a.Action = 'relabel' AND p.LabelFixedAt IS NOT NULL
+ORDER BY a.At DESC;
+```
+
 ## When a bad post is featured ("In their words")
 
 Each title page features the strongest post on each side (`HighlightRules` in `Application/Social/TitleHighlights.cs`

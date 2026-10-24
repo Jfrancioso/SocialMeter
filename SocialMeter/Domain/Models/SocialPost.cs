@@ -69,6 +69,13 @@ public sealed class SocialPost
     /// <summary>Hidden by an operator. Not stored; query <see cref="HiddenAt"/> in LINQ.</summary>
     public bool Hidden => HiddenAt is not null;
 
+    /// <summary>
+    /// Set when an operator corrected the post's label by hand (see PostModeration.Relabel). While set, re-reads by the
+    /// assessor keep <see cref="Sentiment"/> and <see cref="SentimentScore"/> as the operator left them. The assessor's
+    /// own label, and the operator's reason, are in the moderation log.
+    /// </summary>
+    public DateTime? LabelFixedAt { get; set; }
+
     public int Upvotes { get; set; }
     public int Comments { get; set; }
 

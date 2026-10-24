@@ -18,11 +18,27 @@ public sealed class HidePostRequest
     public string? TitleName { get; init; }
 }
 
-/// <summary>The result of a hide or restore: the post's state and the title's score afterwards.</summary>
+public sealed class RelabelPostRequest
+{
+    /// <summary>"positive", "neutral" or "negative".</summary>
+    public string Sentiment { get; init; } = "";
+
+    /// <summary>Why, in the operator's own words (3-300 characters). Kept for the assessor's accuracy test.</summary>
+    public string Note { get; init; } = "";
+
+    /// <summary>The title's name, for the log. Optional.</summary>
+    public string? TitleName { get; init; }
+}
+
+/// <summary>The result of a moderation step: the post's state and the title's score afterwards.</summary>
 public sealed class ModerationResultDto
 {
     public int PostId { get; init; }
     public bool Hidden { get; init; }
+
+    /// <summary>The post's label now ("positive", "neutral", "negative"), and whether an operator fixed it.</summary>
+    public string Sentiment { get; init; } = "";
+    public bool LabelFixed { get; init; }
 
     /// <summary>False when the post was already in the requested state.</summary>
     public bool Changed { get; init; }
@@ -57,6 +73,14 @@ public sealed class ModerationEntryDto
 
     /// <summary>Whether the post is hidden right now (so the log can offer Restore only where it applies).</summary>
     public bool CurrentlyHidden { get; init; }
+
+    /// <summary>Whether the post's label is fixed by hand right now (so the log can offer Undo on a relabel).</summary>
+    public bool CurrentlyRelabeled { get; init; }
+
+    /// <summary>A relabel or its undo: the label before and after, and the operator's reason.</summary>
+    public string? FromLabel { get; init; }
+    public string? ToLabel { get; init; }
+    public string? Note { get; init; }
 
     /// <summary>The post no longer exists here (deleted at its source and purged).</summary>
     public bool PostGone { get; init; }

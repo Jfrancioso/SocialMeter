@@ -32,8 +32,8 @@ namespace SocialMeter.Migrations
 
                     b.Property<string>("Action")
                         .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("Actor")
                         .IsRequired()
@@ -43,10 +43,21 @@ namespace SocialMeter.Migrations
                     b.Property<DateTime>("At")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("FromLabel")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<double?>("FromScore")
+                        .HasColumnType("float");
+
                     b.Property<string>("MediaType")
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
 
                     b.Property<int>("PostId")
                         .HasColumnType("int");
@@ -62,6 +73,10 @@ namespace SocialMeter.Migrations
 
                     b.Property<int>("TmdbId")
                         .HasColumnType("int");
+
+                    b.Property<string>("ToLabel")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.HasKey("Id");
 
@@ -279,6 +294,9 @@ namespace SocialMeter.Migrations
                     b.Property<string>("HiddenReason")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("LabelFixedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("LastCheckedAt")
                         .HasColumnType("datetime2");

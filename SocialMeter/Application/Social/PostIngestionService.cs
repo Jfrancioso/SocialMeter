@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SocialMeter.Application.Abstractions;
 using SocialMeter.Application.Common;
 using SocialMeter.Application.Guardrails;
+using SocialMeter.Application.Moderation;
 using SocialMeter.Contracts.Social;
 using SocialMeter.Domain.Models;
 using SocialMeter.Infrastructure.Data;
@@ -192,8 +193,8 @@ public sealed class PostIngestionService
     private static void Apply(SocialPost post, PostAssessment assessment, TrustVerdict trust, string analyzer)
     {
         var result = assessment.ToResult();
-        post.Sentiment = result.Label;
-        post.SentimentScore = result.Score;
+        // An operator's corrected label outlasts any re-read, as a removal does (below).
+        PostModeration.WriteAssessedLabel(post, result.Label, result.Score);
         post.Analyzer = assessment.ReadBy ?? analyzer;
         post.AnalyzerNote = assessment.Note is null ? null : assessment.Note.Clip(120);
         post.Substance = Math.Clamp(assessment.Substance, 0, 1);

@@ -78,6 +78,9 @@ public sealed class SocialPostDto
     /// <summary>This post's share of the title's total weight, 0–100; null when not computed for this listing.</summary>
     public double? WeightShare { get; init; }
 
+    /// <summary>A moderator corrected this post's label by hand (the reason stays private to operators).</summary>
+    public bool LabelFixed { get; init; }
+
     public static string SubstanceLevelFor(double substance) => substance >= 0.6 ? "detailed" : substance >= 0.3 ? "some" : "bare";
     public static string TrustLevelFor(double trust) => trust >= 1 ? "full" : "reduced";
 
@@ -88,6 +91,7 @@ public sealed class SocialPostDto
         SubstanceLevel = SubstanceLevelFor(p.Substance),
         TrustLevel = TrustLevelFor(p.TrustWeight),
         WeightShare = weightShare is null ? null : Math.Round(weightShare.Value, 1),
+        LabelFixed = p.LabelFixedAt is not null,
         PlaytimeHours = p.EngagementMinutes is { } m ? Math.Round(m / 60.0, 1) : null,
         Id = p.Id,
         Platform = p.Platform,
