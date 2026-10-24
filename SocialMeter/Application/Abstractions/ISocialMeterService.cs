@@ -28,6 +28,12 @@ public interface IScoreExplainer
     Task<ScoreExplanationDto?> ExplainAsync(MediaType mediaType, int tmdbId, CancellationToken ct = default);
 }
 
+/// <summary>The featured post on each side of a cached reading ("In their words"). Never contacts the sources.</summary>
+public interface ITitleHighlights
+{
+    Task<TitleHighlightsDto> GetAsync(MediaType mediaType, int tmdbId, CancellationToken ct = default);
+}
+
 /// <summary>Read-only queries over stored posts, cached readings and daily history. Never contacts the sources.</summary>
 public interface IPostQueries
 {

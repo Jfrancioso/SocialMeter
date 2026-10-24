@@ -19,13 +19,15 @@ public sealed class SocialMeterController : ControllerBase
 {
     private readonly ISocialMeterService _meter;
     private readonly IScoreExplainer _explainer;
+    private readonly ITitleHighlights _highlights;
     private readonly IPostQueries _queries;
     private readonly LivePullBudget _budget;
 
-    public SocialMeterController(ISocialMeterService meter, IScoreExplainer explainer, IPostQueries queries, LivePullBudget budget)
+    public SocialMeterController(ISocialMeterService meter, IScoreExplainer explainer, ITitleHighlights highlights, IPostQueries queries, LivePullBudget budget)
     {
         _meter = meter;
         _explainer = explainer;
+        _highlights = highlights;
         _queries = queries;
         _budget = budget;
     }
@@ -59,6 +61,12 @@ public sealed class SocialMeterController : ControllerBase
         var result = await _explainer.ExplainAsync(type, id, ct);
         return result is null ? NotFound() : Ok(result);
     }
+
+    /// <summary>"In their words": the featured positive and negative post, with each side's size. Both null with no counted posts.</summary>
+    [HttpGet("{type}/{id:int}/highlights")]
+    [EnableRateLimiting(Web.DependencyInjection.ReadsPolicy)]
+    public async Task<ActionResult<TitleHighlightsDto>> Highlights([FromRoute] MediaType type, [FromRoute] int id, CancellationToken ct = default)
+        => Ok(await _highlights.GetAsync(type, id, ct));
 
     /// <summary>One reading per day plus the Mann-Kendall trend verdict over the configured window.</summary>
     [HttpGet("{type}/{id:int}/history")]

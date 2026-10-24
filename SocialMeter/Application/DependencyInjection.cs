@@ -27,6 +27,7 @@ public static class DependencyInjection
         // Use cases, one class each.
         services.AddScoped<ISocialMeterService, SocialMeterService>();
         services.AddScoped<IScoreExplainer, ScoreExplainer>();
+        services.AddScoped<ITitleHighlights, TitleHighlights>();
         services.AddScoped<IPostQueries, PostQueryService>();
         services.AddScoped<IRescoreService, RescoreService>();
         services.AddScoped<ITitleService, TitleService>();
