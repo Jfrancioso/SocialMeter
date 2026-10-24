@@ -8,12 +8,13 @@ using SocialMeter.Web.Filters;
 namespace SocialMeter.Controllers;
 
 /// <summary>
-/// The private reading shelf (/shelf on the site): read-only, for admins and the emails on Shelf:Readers. In production
-/// Cloudflare Access stands in front of this path, as it does for /api/admin, and the API checks the token again. A
-/// reader can use only these endpoints; the admin ones still refuse them (see <see cref="RequireAdminAttribute"/>).
+/// The private reading shelf (/shelf on the site): read-only, for admins and the emails on Shelf:Readers. It lives under
+/// /api/admin so the Cloudflare Access application that already guards the admin endpoints guards it too (one sign-in,
+/// one cookie, no second application to keep in step), and the API checks the token again. A reader can use only these
+/// endpoints; every other /api/admin endpoint still refuses them (see <see cref="RequireAdminAttribute"/>).
 /// </summary>
 [ApiController]
-[Route("api/shelf")]
+[Route("api/admin/shelf")]
 [RequireAdmin(ReadersToo = true)]
 [EnableCors(Web.DependencyInjection.AdminCorsPolicy)]
 public sealed class ShelfController : ControllerBase
@@ -47,8 +48,8 @@ public sealed class ShelfController : ControllerBase
 
     /// <summary>
     /// A shelf cover from Open Library, which serves covers through redirects to archive.org: fetching them here keeps the
-    /// site's image policy to its own API instead of allowing archive.org. Only the shelf's own cover ids are fetched,
-    /// and each is kept for a week after the first view.
+    /// site's image policy as it is instead of allowing archive.org. Only the shelf's own cover ids are fetched, and each
+    /// is kept for a week after the first view.
     /// </summary>
     [HttpGet("covers/{coverId:int}")]
     public async Task<IActionResult> Cover(int coverId, CancellationToken ct)

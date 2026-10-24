@@ -244,22 +244,24 @@ A private page of ten hand-picked spicy romance and romantasy series (`Applicati
 series' books in order and its first book's cover. Not linked anywhere, not in the sitemap, `Disallow`ed in robots.txt.
 Not scored yet: scoring books is a separate, later piece.
 
-Who can open it: admins, plus the emails on `Shelf:Readers` (App Service settings only; the repo is public). A reader
-signs in through Cloudflare Access like an admin does, but the API lets readers into the shelf's read-only endpoints
-only (`[RequireAdmin(ReadersToo = true)]` on `ShelfController`); every admin endpoint still answers 403 for them.
+Who can open it: admins, plus the emails on `Shelf:Readers` (App Service settings only; the repo is public). The shelf's
+endpoints live under `/api/admin/shelf`, so the Cloudflare Access application that guards the admin endpoints guards
+them too: one sign-in, nothing extra to set up for admins. A reader signs in through that same application, but the API
+lets readers into the shelf's read-only endpoints only (`[RequireAdmin(ReadersToo = true)]` on `ShelfController`);
+every other admin endpoint still answers 403 for them. The site's nav shows a Shelf link to admins and to a browser
+that has opened the shelf (a link only; the API decides who sees it).
 
 Setting up a reader (both steps are needed):
 
 1. Cloudflare Zero Trust → Access → Applications → the application protecting `api.chatterbub.com/api/admin`: add the
-   path `api/shelf` on `api.chatterbub.com` to it, and the reader's email to its policy. Access then asks for the
-   one-time code on the shelf's endpoints, as it does for admin.
+   reader's email to its policy, so Access sends them the one-time code.
 2. The API's App Service setting `Shelf__Readers__0` = the reader's email (`__1`, `__2` for more):
 
 ```bash
 az webapp config appsettings set -g socialmeter-jf-rg -n socialmeter-jf-api --settings Shelf__Readers__0=<email>
 ```
 
-Covers come from Open Library through the API (`GET api/shelf/covers/{id}`, only the shelf's own ten ids, kept a week in
+Covers come from Open Library through the API (`GET api/admin/shelf/covers/{id}`, only the shelf's own ten ids, kept a week in
 memory), so the site's image policy allows only its own API rather than archive.org, where Open Library redirects.
 
 Remove a reader: delete the setting and the email from the Access policy. Remove the shelf: delete `ShelfController`,
