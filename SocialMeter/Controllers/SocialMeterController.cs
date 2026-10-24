@@ -20,14 +20,17 @@ public sealed class SocialMeterController : ControllerBase
     private readonly ISocialMeterService _meter;
     private readonly IScoreExplainer _explainer;
     private readonly ITitleHighlights _highlights;
+    private readonly ICrowdShape _crowd;
     private readonly IPostQueries _queries;
     private readonly LivePullBudget _budget;
 
-    public SocialMeterController(ISocialMeterService meter, IScoreExplainer explainer, ITitleHighlights highlights, IPostQueries queries, LivePullBudget budget)
+    public SocialMeterController(ISocialMeterService meter, IScoreExplainer explainer, ITitleHighlights highlights, ICrowdShape crowd,
+        IPostQueries queries, LivePullBudget budget)
     {
         _meter = meter;
         _explainer = explainer;
         _highlights = highlights;
+        _crowd = crowd;
         _queries = queries;
         _budget = budget;
     }
@@ -67,6 +70,21 @@ public sealed class SocialMeterController : ControllerBase
     [EnableRateLimiting(Web.DependencyInjection.ReadsPolicy)]
     public async Task<ActionResult<TitleHighlightsDto>> Highlights([FromRoute] MediaType type, [FromRoute] int id, CancellationToken ct = default)
         => Ok(await _highlights.GetAsync(type, id, ct));
+
+    /// <summary>"The crowd" (pilot titles only, CrowdShape:Titles): every counted post as a dot, no text. Enabled=false elsewhere.</summary>
+    [HttpGet("{type}/{id:int}/crowd")]
+    [EnableRateLimiting(Web.DependencyInjection.ReadsPolicy)]
+    public async Task<ActionResult<CrowdShapeDto>> Crowd([FromRoute] MediaType type, [FromRoute] int id, CancellationToken ct = default)
+        => Ok(await _crowd.GetAsync(type, id, ct));
+
+    /// <summary>One counted post of a title, for a dot clicked in "The crowd". 404 for a hidden, filtered or other title's post.</summary>
+    [HttpGet("{type}/{id:int}/posts/{postId:int}")]
+    [EnableRateLimiting(Web.DependencyInjection.ReadsPolicy)]
+    public async Task<ActionResult<SocialPostDto>> Post([FromRoute] MediaType type, [FromRoute] int id, [FromRoute] int postId, CancellationToken ct = default)
+    {
+        var post = await _queries.GetPostAsync(type, id, postId, ct);
+        return post is null ? NotFound() : Ok(post);
+    }
 
     /// <summary>One reading per day plus the Mann-Kendall trend verdict over the configured window.</summary>
     [HttpGet("{type}/{id:int}/history")]

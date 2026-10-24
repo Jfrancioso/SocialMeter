@@ -34,10 +34,19 @@ public interface ITitleHighlights
     Task<TitleHighlightsDto> GetAsync(MediaType mediaType, int tmdbId, CancellationToken ct = default);
 }
 
+/// <summary>"The crowd" (the Crowd Shape pilot): every counted post as a dot, and the shape of the whole. Never contacts the sources.</summary>
+public interface ICrowdShape
+{
+    Task<CrowdShapeDto> GetAsync(MediaType mediaType, int tmdbId, CancellationToken ct = default);
+}
+
 /// <summary>Read-only queries over stored posts, cached readings and daily history. Never contacts the sources.</summary>
 public interface IPostQueries
 {
     Task<PagedResult<SocialPostDto>> GetPostsAsync(MediaType mediaType, int tmdbId, Sentiment? sentiment, string? platform, int page, int pageSize, CancellationToken ct = default);
+
+    /// <summary>One counted post of this title (a dot clicked in "The crowd"); null when it isn't one.</summary>
+    Task<SocialPostDto?> GetPostAsync(MediaType mediaType, int tmdbId, int postId, CancellationToken ct = default);
 
     /// <summary>Cached readings only. Keys look like "movie:693134".</summary>
     Task<IReadOnlyDictionary<string, SnapshotDto>> GetSnapshotsAsync(IEnumerable<(MediaType MediaType, int TmdbId)> keys, CancellationToken ct = default);

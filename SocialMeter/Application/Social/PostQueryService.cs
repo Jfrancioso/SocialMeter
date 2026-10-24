@@ -41,16 +41,30 @@ public sealed class PostQueryService : IPostQueries
 
         // Each post's share of the whole title's weight, so the card can say "4 % of this score".
         var now = DateTime.UtcNow;
-        var totalWeight = (await _db.SocialPosts
-                .Where(p => p.TmdbId == tmdbId && p.MediaType == mediaType && !p.Excluded)
-                .Select(p => new SocialPost { Upvotes = p.Upvotes, Comments = p.Comments, CreatedAt = p.CreatedAt, TrustWeight = p.TrustWeight, Substance = p.Substance })
-                .ToListAsync(ct))
-            .Sum(p => SocialScoreCalculator.Weight(p, now));
+        var totalWeight = await TotalWeightAsync(mediaType, tmdbId, now, ct);
 
         return new PagedResult<SocialPostDto>(
             items.Select(p => SocialPostDto.From(p, SocialScoreCalculator.Share(p, totalWeight, now))).ToList(),
             page, (int)Math.Ceiling(total / (double)pageSize), total);
     }
+
+    public async Task<SocialPostDto?> GetPostAsync(MediaType mediaType, int tmdbId, int postId, CancellationToken ct = default)
+    {
+        // Counted posts of this title only: a hidden or filtered post, or another title's, is "not found".
+        var post = await _db.SocialPosts.SingleOrDefaultAsync(p => p.Id == postId && p.TmdbId == tmdbId && p.MediaType == mediaType && !p.Excluded, ct);
+        if (post is null) return null;
+
+        var now = DateTime.UtcNow;
+        return SocialPostDto.From(post, SocialScoreCalculator.Share(post, await TotalWeightAsync(mediaType, tmdbId, now, ct), now));
+    }
+
+    /// <summary>The title's total counted weight (numbers only, no post text), for a post's share of the score.</summary>
+    private async Task<double> TotalWeightAsync(MediaType mediaType, int tmdbId, DateTime now, CancellationToken ct) =>
+        (await _db.SocialPosts
+            .Where(p => p.TmdbId == tmdbId && p.MediaType == mediaType && !p.Excluded)
+            .Select(p => new SocialPost { Upvotes = p.Upvotes, Comments = p.Comments, CreatedAt = p.CreatedAt, TrustWeight = p.TrustWeight, Substance = p.Substance })
+            .ToListAsync(ct))
+        .Sum(p => SocialScoreCalculator.Weight(p, now));
 
     public async Task<IReadOnlyList<SocialMeter.Application.Home.TalkedAbout>> GetMostTalkedAboutAsync(DateTime since, int minPosts, int take, CancellationToken ct = default)
     {

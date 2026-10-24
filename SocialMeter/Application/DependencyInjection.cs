@@ -22,12 +22,14 @@ public static class DependencyInjection
         services.Configure<WatchOptions>(configuration.GetSection(WatchOptions.SectionName));
         services.Configure<HomeOptions>(configuration.GetSection(HomeOptions.SectionName));
         services.Configure<SearchOptions>(configuration.GetSection(SearchOptions.SectionName));
+        services.Configure<CrowdShapeOptions>(configuration.GetSection(CrowdShapeOptions.SectionName));
         services.TryAddSingleton(TimeProvider.System);
 
         // Use cases, one class each.
         services.AddScoped<ISocialMeterService, SocialMeterService>();
         services.AddScoped<IScoreExplainer, ScoreExplainer>();
         services.AddScoped<ITitleHighlights, TitleHighlights>();
+        services.AddScoped<ICrowdShape, CrowdShapeService>();
         services.AddScoped<IPostQueries, PostQueryService>();
         services.AddScoped<IRescoreService, RescoreService>();
         services.AddScoped<ITitleService, TitleService>();
