@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using SocialMeter.Application.Abstractions;
+using SocialMeter.Application.Tracking;
 using SocialMeter.Contracts.Home;
 using SocialMeter.Domain.Models;
 using SocialMeter.Options;
@@ -27,10 +28,11 @@ public sealed class HomeFeedService
     private readonly SocialMeterOptions _options;
     private readonly HomeOptions _home;
     private readonly IMemoryCache _cache;
+    private readonly WatchWindows _watch;
     private readonly ILogger<HomeFeedService> _logger;
 
     public HomeFeedService(ITitleService titles, ITitleTracker tracker, IPostQueries queries, IOptions<SocialMeterOptions> options,
-        IOptions<HomeOptions> home, IMemoryCache cache, ILogger<HomeFeedService> logger)
+        IOptions<HomeOptions> home, IMemoryCache cache, WatchWindows watch, ILogger<HomeFeedService> logger)
     {
         _titles = titles;
         _tracker = tracker;
@@ -38,6 +40,7 @@ public sealed class HomeFeedService
         _options = options.Value;
         _home = home.Value;
         _cache = cache;
+        _watch = watch;
         _logger = logger;
     }
 
@@ -117,13 +120,14 @@ public sealed class HomeFeedService
         var rows = HomeLayout.Dedupe(wanted.Where(built.ContainsKey).Select(k => built[k]));
 
         var trending = await trendingTask;
-        var (featured, featuredLabel, featuredPosts) = await PickFeaturedAsync(trending.Items, ct);
+        var (featured, featuredLabel, featuredPosts, featuredKind) = await PickFeaturedAsync(trending.Items, ct);
         await _tracker.AnnotateAsync(rows.SelectMany(r => r.Items).Concat(featured is null ? [] : [featured]), ct);
 
         var response = new HomeResponseDto
         {
             Featured = featured,
             FeaturedLabel = featuredLabel,
+            FeaturedKind = featuredKind,
             FeaturedPosts = featuredPosts,
             FeaturedWindowDays = _options.FeaturedWindowDays,
             Rows = rows
@@ -185,11 +189,14 @@ public sealed class HomeFeedService
         }) ?? Array.Empty<TalkedAbout>();
 
     /// <summary>
-    /// The hero: the tracked movie or show people are actually posting about (see <see cref="FeaturedPick"/>), else TMDB's
-    /// trending pick, labelled as TMDB's.
+    /// The hero: an open watch window's title (a live event) while one is open; else the tracked movie or show people are
+    /// actually posting about (see <see cref="FeaturedPick"/>); else TMDB's trending pick, labelled as TMDB's.
     /// </summary>
-    private async Task<(Title? Title, string Label, int? Posts)> PickFeaturedAsync(IReadOnlyList<Title> trending, CancellationToken ct)
+    private async Task<(Title? Title, string Label, int? Posts, string Kind)> PickFeaturedAsync(IReadOnlyList<Title> trending, CancellationToken ct)
     {
+        if (await WatchWindowTitleAsync(ct) is { } live)
+            return (live.Title, live.Label, null, FeaturedPick.KindEvent);
+
         try
         {
             var candidates = await MostTalkedAboutAsync(ct);
@@ -203,7 +210,7 @@ public sealed class HomeFeedService
             {
                 var title = await _titles.GetDetailsAsync(pick.MediaType, pick.TmdbId, ct);
                 if (title is { BackdropPath.Length: > 0 })
-                    return (title, FeaturedPick.MostTalkedAbout, pick.Posts);
+                    return (title, FeaturedPick.MostTalkedAbout, pick.Posts, FeaturedPick.KindTalkedAbout);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -213,7 +220,30 @@ public sealed class HomeFeedService
         }
 
         var fallback = trending.FirstOrDefault(t => t.BackdropPath.Length > 0) ?? trending.FirstOrDefault();
-        return (fallback, FeaturedPick.TrendingOnTmdb, null);
+        return (fallback, FeaturedPick.TrendingOnTmdb, null, FeaturedPick.KindTrending);
+    }
+
+    /// <summary>
+    /// The title of the earliest-starting open watch window (Watch:Windows, e.g. a watch party), labelled with the window's
+    /// label. The hero switches within one warm-up (Home:WarmEveryMinutes) of the window opening and back after it closes.
+    /// Null when no window is open or its title can't be shown; the usual pick then applies.
+    /// </summary>
+    private async Task<(Title Title, string Label)?> WatchWindowTitleAsync(CancellationToken ct)
+    {
+        try
+        {
+            foreach (var window in _watch.Open().OrderBy(w => w.StartsAt))
+            {
+                var title = await _titles.GetDetailsAsync(window.MediaType, window.TmdbId, ct);
+                if (title is { BackdropPath.Length: > 0 })
+                    return (title, WatchWindows.ReasonFor(window));
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Watch-window hero lookup failed; picking the usual hero");
+        }
+        return null;
     }
 
     private sealed record MoverRows(IReadOnlyList<Mover> Rising, IReadOnlyList<Mover> Falling);

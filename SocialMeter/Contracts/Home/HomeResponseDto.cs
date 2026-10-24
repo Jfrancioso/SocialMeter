@@ -6,8 +6,14 @@ public sealed class HomeResponseDto
 {
     public Title? Featured { get; init; }
 
-    /// <summary>"Most talked about" when the hero was chosen from Chatterbub's own posts; "Trending on TMDB" when none qualified.</summary>
+    /// <summary>
+    /// "Most talked about" when the hero was chosen from Chatterbub's own posts; "Trending on TMDB" when none qualified;
+    /// a watch window's label ("Watch party tonight") while one is open.
+    /// </summary>
     public string FeaturedLabel { get; init; } = "";
+
+    /// <summary>Why the hero leads: "talked-about", "trending" or "event" (an open watch window). See FeaturedPick.</summary>
+    public string FeaturedKind { get; init; } = "";
 
     /// <summary>Counted posts behind the pick over the last <see cref="FeaturedWindowDays"/> days; null for the TMDB fallback.</summary>
     public int? FeaturedPosts { get; init; }

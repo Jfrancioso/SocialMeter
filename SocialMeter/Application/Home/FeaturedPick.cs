@@ -15,6 +15,9 @@ public static class FeaturedPick
     public const string MostTalkedAbout = "Most talked about";
     public const string TrendingOnTmdb = "Trending on TMDB";
 
+    /// <summary>Why the hero leads, for the page's wording (HomeResponseDto.FeaturedKind).</summary>
+    public const string KindTalkedAbout = "talked-about", KindTrending = "trending", KindEvent = "event";
+
     /// <summary>Eligible candidates, most posts first; the caller takes the first one it can show (it needs a backdrop).</summary>
     public static IEnumerable<TalkedAbout> Eligible(IEnumerable<TalkedAbout> candidates, Func<TalkedAbout, bool> isTracked, int minPosts, double minConfidence)
         => candidates
